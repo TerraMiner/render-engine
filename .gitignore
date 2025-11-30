@@ -1,0 +1,11 @@
+.idea/
+.kotlin/
+
+build/
+distributions/
+
+.github/
+.gradle/
+*.class
+*.jar
+*.log
