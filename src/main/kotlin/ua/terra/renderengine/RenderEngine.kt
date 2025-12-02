@@ -100,7 +100,6 @@ class RenderEngine(
         textEffect: Float = 0f
     ) {
         if (commandCount >= maxSprites) {
-            println("Warning: Max sprites limit reached, flushing...")
             flush()
         }
 

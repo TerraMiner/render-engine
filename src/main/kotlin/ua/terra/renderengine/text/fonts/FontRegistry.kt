@@ -23,15 +23,15 @@ class FontRegistry {
             throw UnsupportedOperationException("Fonts already initialized!")
         }
 
-        println("Initializing fonts...")
+        println("Initializing fonts...")//todo temporary with println, soon loading stages
 
         fontConfigs.forEach { (key, config) ->
             val (path, size) = config
             try {
                 fonts[key] = Font.load(path, "${RenderEngineCore.getCoreApi().resourcesPath}/cache/fonts", size)
-                println("  ✓ Font '$key' loaded ($path, ${size}px)")
+                println("Font '$key' loaded ($path, ${size}px)")
             } catch (e: Exception) {
-                System.err.println("  ✗ Failed to load font '$key': ${e.message}")
+                System.err.println("Failed to load font '$key': ${e.message}")
                 throw IllegalStateException("Font initialization failed for '$key'", e)
             }
         }
@@ -53,9 +53,9 @@ class FontRegistry {
             val (path, size) = config
             try {
                 fonts[key] = Font.load(path, cachePath, size)
-                println("  ✓ Font '$key' reloaded")
+                println("Font '$key' reloaded")
             } catch (e: Exception) {
-                System.err.println("  ✗ Failed to reload font '$key': ${e.message}")
+                System.err.println("Failed to reload font '$key': ${e.message}")
             }
         }
 

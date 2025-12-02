@@ -118,31 +118,24 @@ object TextureAtlasBuilder {
         metaFile: File,
         atlasFile: File
     ): TexturesAtlas {
-        println("Building")
         val loaded = prepareTextures(textures)
-        println("Preparing")
         val atlasSize = calculateAtlasSize(loaded, padding)
-        println("Calculating")
         val packed = packTextures(loaded, atlasSize, padding)
-        println("Packing")
         val atlasBuffer = createAtlasBuffer(loaded, packed, atlasSize)
-        println("Creating Atlas Buffer")
+
         saveAtlasImage(atlasBuffer, atlasSize, atlasFile)
-        println("Saving")
+
         val textureId = createGLTexture(atlasBuffer, atlasSize)
-        println("glTex")
         val regions = createRegions(packed, atlasSize)
-        println("Regions")
+
         saveMetaFile(metaFile, textures, atlasSize, padding, regions)
-        println("meta")
 
         loaded.forEach {
             it.second.buffer.rewind()
             it.second.free()
         }
-        println("free")
+
         MemoryUtil.memFree(atlasBuffer)
-        println("atlasfree")
 
         return TexturesAtlas(textureId, atlasSize, atlasSize, regions)
     }
