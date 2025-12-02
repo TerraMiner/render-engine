@@ -2,7 +2,7 @@ package ua.terra.renderengine.texture.atlas
 
 import ua.terra.renderengine.texture.model.Model
 
-class TextureAtlas(
+class TexturesAtlas(
     val textureId: Int,
     val width: Int,
     val height: Int,

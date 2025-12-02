@@ -1,16 +1,16 @@
 package ua.terra.renderengine.util
 
-class Color(val rgba: Int) {
+class Color private constructor(val rgba: Int) {
 
     constructor(r: Int, g: Int, b: Int) : this(r, g, b, 255)
     constructor(r: Int, g: Int, b: Int, a: Int) : this((r shl 24) or (g shl 16) or (b shl 8) or a)
 
     constructor(r: Float, g: Float, b: Float) : this(r, g, b, 1.0f)
     constructor(r: Float, g: Float, b: Float, a: Float) : this(
-        ((r * 255).toInt() shl 24) or
-                ((g * 255).toInt() shl 16) or
-                ((b * 255).toInt() shl 8) or
-                ((a * 255).toInt())
+        (r * 255).toInt().coerceIn(0, 255),
+        (g * 255).toInt().coerceIn(0, 255),
+        (b * 255).toInt().coerceIn(0, 255),
+        (a * 255).toInt().coerceIn(0, 255)
     )
 
     val r: Float by lazy { ((rgba shr 24) and 0xFF) / 255.0f }

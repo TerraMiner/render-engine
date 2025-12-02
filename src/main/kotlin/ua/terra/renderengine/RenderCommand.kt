@@ -21,26 +21,98 @@ package ua.terra.renderengine
  * @param tE Texture Effect, like Rainbow, Chroma or Default
  */
 
-class RenderCommand {
-    var tId = 0
-    var x = 0f
-    var y = 0f
-    var w = 0f
-    var h = 0f
-    var uvX = 0f
-    var uvY = 0f
-    var uvMX = 0f
-    var uvMY = 0f
-    var packedColor = 0
-    var t = 0f
-    var rot = 0f
-    var iZ = 0f
-    var iC = 0f
-    var rT = 0f
-    var zI = 0
-    var sX = -1f
-    var sY = 0f
-    var sW = 0f
-    var sH = 0f
-    var tE = 0f
+sealed class RenderCommand {
+    abstract var tId: Int
+    abstract var x: Float
+    abstract var y: Float
+    abstract var w: Float
+    abstract var h: Float
+    abstract var uvX: Float
+    abstract var uvY: Float
+    abstract var uvMX: Float
+    abstract var uvMY: Float
+    abstract var packedColor: Int
+    abstract var t: Float
+    abstract var rot: Float
+    abstract var iZ: Float
+    abstract var iC: Float
+    abstract var rT: Float
+    abstract var zI: Int
+    abstract var sX: Float
+    abstract var sY: Float
+    abstract var sW: Float
+    abstract var sH: Float
+    abstract var tE: Float
+
+    class TextureCommand : RenderCommand() {
+        override var tId = 0
+        override var x = 0f
+        override var y = 0f
+        override var w = 0f
+        override var h = 0f
+        override var uvX = 0f
+        override var uvY = 0f
+        override var uvMX = 0f
+        override var uvMY = 0f
+        override var packedColor = 0
+        override var t = 0f
+        override var rot = 0f
+        override var iZ = 0f
+        override var iC = 0f
+        override var rT = RenderType.TEXTURE.value
+        override var zI = 0
+        override var sX = -1f
+        override var sY = 0f
+        override var sW = 0f
+        override var sH = 0f
+        override var tE = 0f
+    }
+
+    class TextCommand : RenderCommand() {
+        override var tId = 0
+        override var x = 0f
+        override var y = 0f
+        override var w = 0f
+        override var h = 0f
+        override var uvX = 0f
+        override var uvY = 0f
+        override var uvMX = 0f
+        override var uvMY = 0f
+        override var packedColor = 0
+        override var t = 0f
+        override var rot = 0f
+        override var iZ = 0f
+        override var iC = 0f
+        override var rT = RenderType.TEXT.value
+        override var zI = 0
+        override var sX = -1f
+        override var sY = 0f
+        override var sW = 0f
+        override var sH = 0f
+        override var tE = 0f
+    }
+
+    class GeometryCommand : RenderCommand() {
+        override var tId = 0
+        override var x = 0f
+        override var y = 0f
+        override var w = 0f
+        override var h = 0f
+        override var uvX = 0f
+        override var uvY = 0f
+        override var uvMX = 0f
+        override var uvMY = 0f
+        override var packedColor = 0
+        override var t = 0f
+        override var rot = 0f
+        override var iZ = 0f
+        override var iC = 0f
+        override var rT = RenderType.FILL_RECT.value
+        override var zI = 0
+        override var sX = -1f
+        override var sY = 0f
+        override var sW = 0f
+        override var sH = 0f
+        override var tE = 0f
+    }
 }

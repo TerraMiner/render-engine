@@ -11,34 +11,44 @@ import org.lwjgl.opengl.GL.createCapabilities
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil.NULL
 import ua.terra.renderengine.RenderEngineCore
-import ua.terra.renderengine.texture.TextureManager
+import ua.terra.renderengine.texture.manager.TextureManager
 import ua.terra.renderengine.util.Color
-import ua.terra.renderengine.util.Point
+import ua.terra.renderengine.util.DEFAULT_MAX_FPS
+import ua.terra.renderengine.util.MIN_WINDOW_HEIGHT
+import ua.terra.renderengine.util.MIN_WINDOW_WIDTH
+import ua.terra.renderengine.util.Timer
+import java.io.File
 import kotlin.math.min
 
 class Window(
     val name: String,
     var width: Int,
     var height: Int,
-    val windowPosition: Point<Int> = Point(-1,-1)
+    initialX: Int = -1,
+    initialY: Int = -1
 ) {
     var id: Long = 0
+        private set
 
     var bgColor: Color = Color(150, 200, 250)
-    var maxFpsLimit: Int = 240
+    var maxFpsLimit: Int = DEFAULT_MAX_FPS
 
     private val monitor = glfwGetPrimaryMonitor()
     private lateinit var videoMode: GLFWVidMode
     private var windowedWidth = width
     private var windowedHeight = height
+    private var windowPosX = initialX
+    private var windowPosY = initialY
 
     val centerX get() = width / 2f
     val centerY get() = height / 2f
 
+    private var isCreated = false
+    private var isShown = false
+
     var isFullScreen = false
         set(value) {
             if (field == value) return
-
             if (value) saveWindowedState()
             field = value
             applyWindowMode()
@@ -57,19 +67,79 @@ class Window(
             field = value.coerceIn(5, maxFpsLimit)
         }
 
-    private var framesMetric: Int = 0
-    private var ticksMetric: Int = 0
-    private var resizeCallback: (Int, Int ,Int, Int) -> Unit = { oldWidth: Int, oldHeight: Int, newWidth: Int, newHeight: Int -> }
+    private var onResizeCallbacks = mutableListOf<(oldWidth: Int, oldHeight: Int, newWidth: Int, newHeight: Int) -> Unit>()
+
+    fun onResize(callback: (oldWidth: Int, oldHeight: Int, newWidth: Int, newHeight: Int) -> Unit) {
+        onResizeCallbacks.add(callback)
+    }
+
+    fun onResize(callback: () -> Unit) {
+        onResizeCallbacks.add { _, _, _, _ -> callback() }
+    }
+
+    fun create() {
+        if (isCreated) {
+            println("Window already created!")
+            return
+        }
+
+        setupErrorHandling()
+        createWindowInternal()
+        configureWindow()
+        isCreated = true
+    }
+
+    fun show(core: RenderEngineCore) {
+        if (!isCreated) {
+            throw IllegalStateException("Cannot show window - not created yet!")
+        }
+        if (isShown) {
+            println("Window already shown!")
+            return
+        }
+
+        if (!isFullScreen) {
+            centerWindow()
+        }
+
+        glfwShowWindow(id)
+        glfwMakeContextCurrent(id)
+        createCapabilities()
+
+        setupRendering()
+        setupVisuals(core.resourcesPath)
+
+        isShown = true
+    }
+
+    fun hide() {
+        if (!isShown) return
+        glfwHideWindow(id)
+        isShown = false
+    }
+
+    fun destroy() {
+        if (!isCreated) return
+
+        glfwFreeCallbacks(id)
+        glfwSetErrorCallback(null)?.free()
+        glfwDestroyWindow(id)
+
+        isCreated = false
+        isShown = false
+    }
 
     fun open(core: RenderEngineCore) {
-        setupErrorHandling()
-        createWindow()
-        configureWindow(core)
-        setupRendering()
-        setupVisuals()
+        create()
+        configureCallbacks(core)
+        show(core)
     }
 
     fun startGameLoop(core: RenderEngineCore) {
+        if (!isCreated || !isShown) {
+            throw IllegalStateException("Window must be created and shown before starting game loop!")
+        }
+
         var lastFpsUpdateTime = System.nanoTime()
         var lastRenderTime = System.nanoTime()
         val metrics = core.metrics
@@ -79,39 +149,17 @@ class Window(
             val currentTime = System.currentTimeMillis()
             val currentNano = System.nanoTime()
 
-            glfwPollEvents()
-            metrics.pollLag = (System.nanoTime() - currentNano) / 1_000_000.0
+            processInput(metrics)
+            val ticksToRun = updateTicks(timer, currentTime)
+            runTicks(core, ticksToRun, metrics)
 
-            val ticksToRun = timer.advanceTime(currentTime)
-            for (i in 0 until min(10, ticksToRun)) {
-                val tickStart = System.nanoTime()
-                core.tick()
-                val tickEnd = System.nanoTime()
-                metrics.tpsLag = (tickEnd - tickStart) / 1_000_000.0
-                ticksMetric++
-            }
-
-            val frameTime = 1_000_000_000L / fpsLimit
-            if (currentNano - lastRenderTime >= frameTime) {
-
-                glClear(GL_COLOR_BUFFER_BIT)
-                core.render()
-                glfwSwapBuffers(id)
-
-                val renderEnd = System.nanoTime()
-                metrics.videoLag = (renderEnd - currentNano) / 1_000_000.0
-
-                framesMetric++
+            val shouldRender = checkRenderTime(currentNano, lastRenderTime)
+            if (shouldRender) {
+                renderFrame(core, metrics)
                 lastRenderTime = currentNano
             }
 
-            if (currentNano - lastFpsUpdateTime >= 1_000_000_000L) {
-                metrics.framesPerSecond = framesMetric
-                metrics.ticksPerSecond = ticksMetric
-                framesMetric = 0
-                ticksMetric = 0
-                lastFpsUpdateTime = currentNano
-            }
+            lastFpsUpdateTime = updateMetrics(currentNano,lastFpsUpdateTime, metrics)
         }
 
         close(core)
@@ -119,11 +167,8 @@ class Window(
 
     fun close(core: RenderEngineCore) {
         core.disable()
-        glfwFreeCallbacks(id)
-        glfwSetErrorCallback(null)?.free()
-        glfwSetWindowShouldClose(id, true)
+        destroy()
         glfwTerminate()
-        glfwDestroyWindow(id)
     }
 
     private fun setupErrorHandling() {
@@ -135,7 +180,7 @@ class Window(
         GLFWErrorCallback.createPrint(System.err).set()
     }
 
-    private fun createWindow() {
+    private fun createWindowInternal() {
         val monitorHandle = if (isFullScreen) monitor else 0
         id = glfwCreateWindow(width, height, name, monitorHandle, 0)
 
@@ -144,66 +189,12 @@ class Window(
         }
     }
 
-    private fun configureWindow(core: RenderEngineCore) {
+    private fun configureWindow() {
         videoMode = glfwGetVideoMode(monitor)!!
-
-        if (!isFullScreen) {
-            centerWindow()
-        }
-
-        glfwShowWindow(id)
-        glfwMakeContextCurrent(id)
-        createCapabilities()
-        setupCallbacks(core)
     }
 
-    private fun setupRendering() {
-        glEnable(GL_TEXTURE_2D)
-        vsync = false
-    }
-
-    private fun setupVisuals() {
-        setWindowIcon()
-        setCursorIcon()
-    }
-
-    private fun saveWindowedState() {
-        val posXBuf = BufferUtils.createIntBuffer(1)
-        val posYBuf = BufferUtils.createIntBuffer(1)
-        glfwGetWindowPos(id, posXBuf, posYBuf)
-        windowPosition.x = posXBuf.get()
-        windowPosition.y = posYBuf.get()
-        windowedWidth = width
-        windowedHeight = height
-    }
-
-    private fun applyWindowMode() {
-        glfwSetWindowMonitor(
-            id,
-            if (isFullScreen) monitor else 0,
-            if (isFullScreen) 0 else windowPosition.x,
-            if (isFullScreen) 0 else windowPosition.y,
-            if (isFullScreen) videoMode.width() else windowedWidth,
-            if (isFullScreen) videoMode.height() else windowedHeight,
-            if (isFullScreen) videoMode.refreshRate() else GLFW_DONT_CARE
-        )
-    }
-
-    private fun updateViewport() {
-        val viewportWidth = if (isFullScreen) videoMode.width() else width
-        val viewportHeight = if (isFullScreen) videoMode.height() else height
-
-        glViewport(0, 0, viewportWidth, viewportHeight)
-    }
-
-    private fun centerWindow() {
-        val targetX = if (windowPosition.x != -1) windowPosition.x else (videoMode.width() - width) / 2
-        val targetY = if (windowPosition.y != -1) windowPosition.y else (videoMode.height() - height) / 2
-        glfwSetWindowPos(id, targetX, targetY)
-    }
-
-    private fun setupCallbacks(core: RenderEngineCore) {
-        glfwSetWindowSizeLimits(id, 800, 600, GLFW_DONT_CARE, GLFW_DONT_CARE)
+    private fun configureCallbacks(core: RenderEngineCore) {
+        glfwSetWindowSizeLimits(id, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, GLFW_DONT_CARE, GLFW_DONT_CARE)
 
         glfwSetWindowSizeCallback(id, object : GLFWWindowSizeCallback() {
             override fun invoke(argWindow: Long, argWidth: Int, argHeight: Int) {
@@ -212,7 +203,7 @@ class Window(
                 width = argWidth
                 height = argHeight
                 updateViewport()
-                resizeCallback(oldWidth, oldHeight, width, height)
+                onResizeCallbacks.forEach { it.invoke(oldWidth, oldHeight, width, height) }
             }
         })
 
@@ -223,21 +214,114 @@ class Window(
         }
     }
 
-    private fun setCursorIcon() {
+    private fun setupRendering() {
+        glEnable(GL_TEXTURE_2D)
+        vsync = false
+    }
+
+    private fun setupVisuals(resourcesDir: String) {
+        setWindowIcon(resourcesDir)
+        setCursorIcon(resourcesDir)
+    }
+
+    private fun processInput(metrics: Metrics) {
+        metrics.pollLag.measure(::glfwPollEvents)
+    }
+
+    private fun updateTicks(timer: Timer, currentTime: Long): Int {
+        return timer.advanceTime(currentTime)
+    }
+
+    private fun runTicks(core: RenderEngineCore, ticksToRun: Int, metrics: Metrics) {
+        repeat(min(10, ticksToRun)) {
+            metrics.tpsLag.measure(core::tick)
+            metrics.ticksPerSecond.increase()
+            metrics.timer.tickCount++
+        }
+    }
+
+    private fun checkRenderTime(currentNano: Long, lastRenderTime: Long): Boolean {
+        val frameTime = 1_000_000_000L / fpsLimit
+        return currentNano - lastRenderTime >= frameTime
+    }
+
+    private fun renderFrame(core: RenderEngineCore, metrics: Metrics) {
+        metrics.videoLag.measure {
+            glClear(GL_COLOR_BUFFER_BIT)
+            core.render()
+            glfwSwapBuffers(id)
+        }
+        metrics.framesPerSecond.increase()
+    }
+
+    private fun updateMetrics(
+        currentNano: Long,
+        lastFpsUpdateTime: Long,
+        metrics: Metrics,
+    ): Long {
+        if (currentNano - lastFpsUpdateTime >= 1_000_000_000L) {
+            metrics.framesPerSecond.flush()
+            metrics.ticksPerSecond.flush()
+            return currentNano
+        }
+        return lastFpsUpdateTime
+    }
+
+
+    private fun saveWindowedState() {
+        val posXBuf = BufferUtils.createIntBuffer(1)
+        val posYBuf = BufferUtils.createIntBuffer(1)
+        glfwGetWindowPos(id, posXBuf, posYBuf)
+        windowPosX = posXBuf.get()
+        windowPosY = posYBuf.get()
+        windowedWidth = width
+        windowedHeight = height
+    }
+
+    private fun applyWindowMode() {
+        if (isFullScreen) {
+            glfwSetWindowMonitor(
+                id, monitor, 0, 0,
+                videoMode.width(), videoMode.height(),
+                videoMode.refreshRate()
+            )
+        } else {
+            glfwSetWindowMonitor(
+                id, 0, windowPosX, windowPosY,
+                windowedWidth, windowedHeight,
+                GLFW_DONT_CARE
+            )
+        }
+    }
+
+    private fun updateViewport() {
+        val viewportWidth = if (isFullScreen) videoMode.width() else width
+        val viewportHeight = if (isFullScreen) videoMode.height() else height
+        glViewport(0, 0, viewportWidth, viewportHeight)
+    }
+
+    private fun centerWindow() {
+        val targetX = if (windowPosX != -1) windowPosX else (videoMode.width() - width) / 2
+        val targetY = if (windowPosY != -1) windowPosY else (videoMode.height() - height) / 2
+        glfwSetWindowPos(id, targetX, targetY)
+    }
+
+    private fun setCursorIcon(resourcesDir: String) {
         val image = GLFWImage.create()
-        val data = TextureManager.loadToGLFWImage("cursor/cursor.png", image, 4)
+        val cursorPath = File(resourcesDir, "cursor/cursor.png").absolutePath
+        val data = TextureManager.loadToGLFWImage(cursorPath, image, 4)
         val cursor = glfwCreateCursor(image, 0, 0)
         glfwSetCursor(id, cursor)
         data.free()
     }
 
-    private fun setWindowIcon() {
-        val iconSizes = intArrayOf(16, 32, 48, 64)
+    private fun setWindowIcon(resourcesDir: String, vararg iconSizes: Int = intArrayOf(16, 32, 48, 64)) {
         val icons = GLFWImage.malloc(iconSizes.size)
 
         val imageDatas = iconSizes.mapIndexed { index, size ->
+            val iconPath = File(resourcesDir, "icons/icon_${size}x${size}.png").absolutePath
             TextureManager.loadToGLFWImageBuffer(
-                "icons/icon_${size}x${size}.png",
+                iconPath,
                 index,
                 icons,
                 4

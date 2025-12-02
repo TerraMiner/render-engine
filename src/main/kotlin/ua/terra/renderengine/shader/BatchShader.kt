@@ -2,9 +2,10 @@ package ua.terra.renderengine.shader
 
 import org.joml.Matrix4f
 import org.lwjgl.opengl.GL20.*
+import ua.terra.renderengine.RenderEngineCore
 import ua.terra.renderengine.window.Window
 
-class BatchShader : Shader("shaders/batch") {
+class BatchShader(path: String = "shaders/batch") : Shader(path) {
     private var colorLoc: Int = 0
     private var samplerLoc: Int = 0
     private var cameraScaleLoc: Int = 0
@@ -12,7 +13,7 @@ class BatchShader : Shader("shaders/batch") {
     private var cameraOffsetLoc: Int = 0
     private var timeLocation = 0
 
-    override fun build(window: Window) {
+    override fun build() {
         loadVertexShader()
         loadFragmentShader()
 
@@ -40,27 +41,34 @@ class BatchShader : Shader("shaders/batch") {
         glUniform1i(samplerLoc, 0)
         setColor(1f, 1f, 1f, 1f)
         setCameraScale(1f, 1f)
+
+        val window = RenderEngineCore.getCoreApi().window
         setCameraCenter(window.centerX, window.centerY)
         setProjection(Matrix4f().setOrtho2D(0f, window.width.toFloat(), window.height.toFloat(), 0f))
     }
 
     fun setColor(r: Float, g: Float, b: Float, a: Float) {
+        bind()
         glUniform4f(colorLoc, r, g, b, a)
     }
 
     fun setCameraScale(scaleX: Float, scaleY: Float) {
+        bind()
         glUniform2f(cameraScaleLoc, scaleX, scaleY)
     }
 
     fun setCameraCenter(x: Float, y: Float) {
+        bind()
         glUniform2f(cameraCenterLoc, x, y)
     }
 
     fun setCameraOffset(x: Float, y: Float) {
+        bind()
         glUniform2f(cameraOffsetLoc, x, y)
     }
 
     fun setTime(time: Float) {
+        bind()
         glUniform1f(timeLocation, time)
     }
 }

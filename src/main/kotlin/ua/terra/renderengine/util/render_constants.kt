@@ -1,0 +1,13 @@
+package ua.terra.renderengine.util
+
+const val MAX_SPRITES = 128000
+const val FLOATS_PER_SPRITE = 19
+const val FLOATS_PER_SPRITE_BYTES = FLOATS_PER_SPRITE * Float.SIZE_BYTES
+const val BUFFER_SIZE = MAX_SPRITES * FLOATS_PER_SPRITE
+const val BUFFER_SIZE_BYTES = BUFFER_SIZE * Float.SIZE_BYTES
+
+const val DEFAULT_ATLAS_PADDING = 2
+const val MAX_ATLAS_SIZE = 8192
+const val MIN_WINDOW_WIDTH = 800
+const val MIN_WINDOW_HEIGHT = 600
+const val DEFAULT_MAX_FPS = 240

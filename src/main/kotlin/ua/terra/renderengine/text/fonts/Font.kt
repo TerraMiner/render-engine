@@ -9,131 +9,254 @@ import org.lwjgl.stb.STBTTFontinfo
 import org.lwjgl.stb.STBTruetype.*
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
-import ua.terra.renderengine.texture.Texture
-import ua.terra.renderengine.texture.TextureManager
+import ua.terra.renderengine.texture.manager.RawTexture
+import ua.terra.renderengine.texture.manager.TextureManager
+import ua.terra.renderengine.util.getCoords
 import java.io.File
-import java.nio.ByteBuffer
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.sqrt
 
-class Font(path: String, val size: Int, val debugBorders: Boolean = false) {
-    var lineHeight: Int = 0
-    val characterMap = Int2ObjectOpenHashMap<CharInfo>()
-    val atlasSquareSize: Int
-    val imageFont: Texture
 
-    private var ascent: Int = 0
-    private var descent: Int = 0
-    private var lineGap: Int = 0
+class Font private constructor(
+    val size: Int,
+    val lineHeight: Int,
+    val characterMap: Int2ObjectOpenHashMap<CharInfo>,
+    val atlasSquareSize: Int,
+    val imageFont: RawTexture,
+    private val ascent: Int,
+    private val descent: Int,
+    private val lineGap: Int
+) : FontHolder {
 
-    init {
-        val jarFile = File(Font::class.java.protectionDomain.codeSource.location.toURI())
-        val cacheDir = File(jarFile.parent, "cache")
-        cacheDir.mkdirs()
+    companion object {
+        fun load(path: String, cachePath: String, size: Int): Font {
+            val cacheDir = File(cachePath)
+            cacheDir.mkdirs()
 
-        val atlasFile = File(cacheDir, "${path.substringBeforeLast('.')}_atlas_$size.png")
+            val fontFileName = path.substringAfterLast('/').substringBeforeLast('.')
+            val atlasFile = File(cacheDir, "${fontFileName}_atlas_$size.png")
+            val metaFile = File(cacheDir, "${fontFileName}_atlas_$size.meta")
 
-        val fontStream = Font::class.java.getResourceAsStream("/${path}")
-            ?: throw IllegalArgumentException("Font not found: /${path}")
+            if (atlasFile.exists() && metaFile.exists()) {
+                val cachedFont = tryLoadFromCache(path, size, atlasFile, metaFile)
+                if (cachedFont != null) {
+                    println("Font $fontFileName ($size) loaded from cache")
+                    return cachedFont
+                }
+            }
 
-        val fontBytes = fontStream.readBytes()
-        val fontBuffer = BufferUtils.createByteBuffer(fontBytes.size)
-        fontBuffer.put(fontBytes)
-        fontBuffer.flip()
-
-        val fontInfo = STBTTFontinfo.create()
-        if (!stbtt_InitFont(fontInfo, fontBuffer)) {
-            throw RuntimeException("Failed to initialize font")
+            println("Generating font atlas for $fontFileName ($size)...")
+            return generateFont(path, size, atlasFile, metaFile)
         }
 
-        val scale = stbtt_ScaleForPixelHeight(fontInfo, size.toFloat())
+        private fun tryLoadFromCache(
+            path: String,
+            size: Int,
+            atlasFile: File,
+            metaFile: File
+        ): Font? {
+            return try {
+                val meta = metaFile.readText()
+                val lines = meta.lines()
+                if (lines.size < 2) return null
 
-        MemoryStack.stackPush().use { stack ->
-            val pAscent = stack.mallocInt(1)
-            val pDescent = stack.mallocInt(1)
-            val pLineGap = stack.mallocInt(1)
+                val cachedPath = lines[0].substringAfter("path=")
+                val cachedSize = lines[1].substringAfter("size=").toInt()
 
-            stbtt_GetFontVMetrics(fontInfo, pAscent, pDescent, pLineGap)
+                if (cachedPath != path || cachedSize != size) return null
 
-            ascent = (pAscent.get(0) * scale).toInt()
-            descent = (pDescent.get(0) * scale).toInt()
-            lineGap = (pLineGap.get(0) * scale).toInt()
-            lineHeight = ascent - descent + lineGap
-        }
+                val fontFile = File(path)
+                val fontBytes = fontFile.readBytes()
+                val fontBuffer = BufferUtils.createByteBuffer(fontBytes.size)
+                fontBuffer.put(fontBytes).flip()
 
-        val availableChars = (32..2000).filter { codepoint ->
-            stbtt_FindGlyphIndex(fontInfo, codepoint) != 0
-        }
+                val fontInfo = STBTTFontinfo.create()
+                if (!stbtt_InitFont(fontInfo, fontBuffer)) return null
 
-        val CHAR_PADDING = 6
-        var maxCharSize = lineHeight
+                val scale = stbtt_ScaleForPixelHeight(fontInfo, size.toFloat())
 
-        MemoryStack.stackPush().use { stack ->
-            val pAdvance = stack.mallocInt(1)
-            val pLeftSideBearing = stack.mallocInt(1)
-            val x0 = stack.mallocInt(1)
-            val y0 = stack.mallocInt(1)
-            val x1 = stack.mallocInt(1)
-            val y1 = stack.mallocInt(1)
+                val (ascent, descent, lineGap) = MemoryStack.stackPush().use { stack ->
+                    val pAscent = stack.mallocInt(1)
+                    val pDescent = stack.mallocInt(1)
+                    val pLineGap = stack.mallocInt(1)
+                    stbtt_GetFontVMetrics(fontInfo, pAscent, pDescent, pLineGap)
+                    Triple(
+                        (pAscent.get(0) * scale).toInt(),
+                        (pDescent.get(0) * scale).toInt(),
+                        (pLineGap.get(0) * scale).toInt()
+                    )
+                }
 
-            for (codepoint in availableChars) {
-                stbtt_GetCodepointHMetrics(fontInfo, codepoint, pAdvance, pLeftSideBearing)
-                stbtt_GetCodepointBitmapBox(fontInfo, codepoint, scale, scale, x0, y0, x1, y1)
+                val lineHeight = ascent - descent + lineGap
 
-                val width = x1.get(0) - x0.get(0)
-                val height = y1.get(0) - y0.get(0)
+                val characterMap = Int2ObjectOpenHashMap<CharInfo>()
+                var atlasSquareSize = 0
 
-                maxCharSize = max(maxCharSize, max(width, height))
+                for (i in 2 until lines.size) {
+                    val line = lines[i]
+                    if (line.startsWith("atlasSquareSize=")) {
+                        atlasSquareSize = line.substringAfter("=").toInt()
+                    } else if (line.startsWith("char=")) {
+                        val parts = line.substringAfter("=").split(",")
+                        if (parts.size == 8) {
+                            val codepoint = parts[0].toInt()
+                            val info = CharInfo(
+                                inAtlasX = parts[1].toInt(),
+                                inAtlasY = parts[2].toInt(),
+                                inAtlasWidth = parts[3].toInt(),
+                                inAtlasHeight = parts[4].toInt(),
+                                xOffset = parts[5].toInt(),
+                                yOffset = parts[6].toInt(),
+                                advanceWidth = parts[7].toInt()
+                            )
+                            characterMap[codepoint] = info
+                        }
+                    }
+                }
+
+                val atlasSize = lines.find { it.startsWith("atlasSize=") }
+                    ?.substringAfter("=")?.toInt() ?: return null
+
+                characterMap.values.forEach { it.buildModel(atlasSize, atlasSize) }
+
+                val imageFont = loadTextureWithLinearFilter(atlasFile.absolutePath)
+
+                Font(size, lineHeight, characterMap, atlasSquareSize, imageFont, ascent, descent, lineGap)
+            } catch (e: Exception) {
+                println("Failed to load font from cache: ${e.message}")
+                null
             }
         }
 
-        maxCharSize += CHAR_PADDING * 2
+        private fun generateFont(
+            path: String,
+            size: Int,
+            atlasFile: File,
+            metaFile: File
+        ): Font {
+            val fontFile = File(path)
 
-        atlasSquareSize = ceil(sqrt(availableChars.size.toDouble())).toInt() + 1
-        val atlasSize = atlasSquareSize * maxCharSize
+            if (!fontFile.exists()) {
+                throw IllegalArgumentException("Font not found: ${fontFile.absolutePath}")
+            }
 
-        MemoryStack.stackPush().use { stack ->
-            val pAdvance = stack.mallocInt(1)
-            val pLeftSideBearing = stack.mallocInt(1)
+            val fontBytes = fontFile.readBytes()
+            val fontBuffer = BufferUtils.createByteBuffer(fontBytes.size)
+            fontBuffer.put(fontBytes).flip()
 
-            availableChars.forEachIndexed { i, codepoint ->
-                stbtt_GetCodepointHMetrics(fontInfo, codepoint, pAdvance, pLeftSideBearing)
+            val fontInfo = STBTTFontinfo.create()
+            if (!stbtt_InitFont(fontInfo, fontBuffer)) {
+                throw RuntimeException("Failed to initialize font")
+            }
 
-                val charWidth = (pAdvance.get(0) * scale).toInt()
+            val scale = stbtt_ScaleForPixelHeight(fontInfo, size.toFloat())
 
-                val pos = getCoords(i, atlasSquareSize, atlasSquareSize)
-                val inAtlasX = maxCharSize * pos.first + CHAR_PADDING
-                val inAtlasY = maxCharSize * pos.second + CHAR_PADDING
-
-                val charHeight = lineHeight
-                val logicalX = inAtlasX + (maxCharSize - CHAR_PADDING * 2 - charWidth) / 2
-                val logicalY = inAtlasY + (maxCharSize - CHAR_PADDING * 2 - charHeight) / 2
-
-                val xOffset = inAtlasX - logicalX
-                val yOffset = inAtlasY - logicalY
-
-                val info = CharInfo(
-                    inAtlasX = inAtlasX - CHAR_PADDING,
-                    inAtlasY = inAtlasY - CHAR_PADDING,
-                    inAtlasWidth = maxCharSize,
-                    inAtlasHeight = maxCharSize,
-                    xOffset = xOffset,
-                    yOffset = yOffset,
-                    advanceWidth = max(1, charWidth)
+            val (ascent, descent, lineGap) = MemoryStack.stackPush().use { stack ->
+                val pAscent = stack.mallocInt(1)
+                val pDescent = stack.mallocInt(1)
+                val pLineGap = stack.mallocInt(1)
+                stbtt_GetFontVMetrics(fontInfo, pAscent, pDescent, pLineGap)
+                Triple(
+                    (pAscent.get(0) * scale).toInt(),
+                    (pDescent.get(0) * scale).toInt(),
+                    (pLineGap.get(0) * scale).toInt()
                 )
-                characterMap[codepoint] = info
             }
+
+            val lineHeight = ascent - descent + lineGap
+
+            val availableChars = (32..2000).filter { codepoint ->
+                stbtt_FindGlyphIndex(fontInfo, codepoint) != 0
+            }
+
+            val charPadding = 6
+            var maxCharSize = lineHeight
+
+            MemoryStack.stackPush().use { stack ->
+                val pAdvance = stack.mallocInt(1)
+                val pLeftSideBearing = stack.mallocInt(1)
+                val x0 = stack.mallocInt(1)
+                val y0 = stack.mallocInt(1)
+                val x1 = stack.mallocInt(1)
+                val y1 = stack.mallocInt(1)
+
+                for (codepoint in availableChars) {
+                    stbtt_GetCodepointHMetrics(fontInfo, codepoint, pAdvance, pLeftSideBearing)
+                    stbtt_GetCodepointBitmapBox(fontInfo, codepoint, scale, scale, x0, y0, x1, y1)
+
+                    val width = x1.get(0) - x0.get(0)
+                    val height = y1.get(0) - y0.get(0)
+
+                    maxCharSize = max(maxCharSize, max(width, height))
+                }
+            }
+
+            maxCharSize += charPadding * 2
+
+            val atlasSquareSize = ceil(sqrt(availableChars.size.toDouble())).toInt() + 1
+            val atlasSize = atlasSquareSize * maxCharSize
+
+            val characterMap = Int2ObjectOpenHashMap<CharInfo>()
+
+            MemoryStack.stackPush().use { stack ->
+                val pAdvance = stack.mallocInt(1)
+                val pLeftSideBearing = stack.mallocInt(1)
+
+                availableChars.forEachIndexed { i, codepoint ->
+                    stbtt_GetCodepointHMetrics(fontInfo, codepoint, pAdvance, pLeftSideBearing)
+
+                    val charWidth = (pAdvance.get(0) * scale).toInt()
+
+                    val pos = getCoords(i, atlasSquareSize, atlasSquareSize)
+                    val inAtlasX = maxCharSize * pos.x + charPadding
+                    val inAtlasY = maxCharSize * pos.y + charPadding
+
+                    val charHeight = lineHeight
+                    val logicalX = inAtlasX + (maxCharSize - charPadding * 2 - charWidth) / 2
+                    val logicalY = inAtlasY + (maxCharSize - charPadding * 2 - charHeight) / 2
+
+                    val xOffset = inAtlasX - logicalX
+                    val yOffset = inAtlasY - logicalY
+
+                    val info = CharInfo(
+                        inAtlasX = inAtlasX - charPadding,
+                        inAtlasY = inAtlasY - charPadding,
+                        inAtlasWidth = maxCharSize,
+                        inAtlasHeight = maxCharSize,
+                        xOffset = xOffset,
+                        yOffset = yOffset,
+                        advanceWidth = max(1, charWidth)
+                    )
+                    characterMap[codepoint] = info
+                }
+            }
+
+            characterMap.values.forEach { it.buildModel(atlasSize, atlasSize) }
+
+            generateAtlasImage(fontInfo, characterMap, atlasSize, maxCharSize, charPadding,
+                scale, ascent, lineHeight, atlasSquareSize, atlasFile)
+
+            saveMetaFile(metaFile, path, size, characterMap, atlasSquareSize, atlasSize)
+
+            val imageFont = loadTextureWithLinearFilter(atlasFile.absolutePath)
+
+            return Font(size, lineHeight, characterMap, atlasSquareSize, imageFont, ascent, descent, lineGap)
         }
 
-        buildCharInfoModels(atlasSize, atlasSize)
-
-        if (!atlasFile.exists()) {
-            val tempFile = File.createTempFile("font_atlas", ".png")
-            tempFile.deleteOnExit()
-
-            var atlasBuffer: ByteBuffer?
-            atlasBuffer = BufferUtils.createByteBuffer(atlasSize * atlasSize * 4)
+        private fun generateAtlasImage(
+            fontInfo: STBTTFontinfo,
+            characterMap: Int2ObjectOpenHashMap<CharInfo>,
+            atlasSize: Int,
+            maxCharSize: Int,
+            charPadding: Int,
+            scale: Float,
+            ascent: Int,
+            lineHeight: Int,
+            atlasSquareSize: Int,
+            atlasFile: File
+        ) {
+            var atlasBuffer = BufferUtils.createByteBuffer(atlasSize * atlasSize * 4)
 
             for (i in 0 until atlasSize * atlasSize) {
                 atlasBuffer.put(i * 4 + 0, 0.toByte())
@@ -142,11 +265,13 @@ class Font(path: String, val size: Int, val debugBorders: Boolean = false) {
                 atlasBuffer.put(i * 4 + 3, 0.toByte())
             }
 
+            atlasBuffer.rewind()
+
             MemoryStack.stackPush().use { stack ->
                 characterMap.toSortedMap().entries.forEachIndexed { index, (codepoint, info) ->
                     val pos = getCoords(index, atlasSquareSize, atlasSquareSize)
-                    val cellX = maxCharSize * pos.first + CHAR_PADDING
-                    val cellY = maxCharSize * pos.second + CHAR_PADDING
+                    val cellX = maxCharSize * pos.x + charPadding
+                    val cellY = maxCharSize * pos.y + charPadding
 
                     val pWidth = stack.mallocInt(1)
                     val pHeight = stack.mallocInt(1)
@@ -169,8 +294,8 @@ class Font(path: String, val size: Int, val debugBorders: Boolean = false) {
                         stbtt_GetCodepointHMetrics(fontInfo, codepoint, pAdvance, pLsb)
 
                         val charWidth = (pAdvance.get(0) * scale).toInt()
-                        val logicalX = cellX + (maxCharSize - CHAR_PADDING * 2 - charWidth) / 2
-                        val logicalY = cellY + (maxCharSize - CHAR_PADDING * 2 - lineHeight) / 2
+                        val logicalX = cellX + (maxCharSize - charPadding * 2 - charWidth) / 2
+                        val logicalY = cellY + (maxCharSize - charPadding * 2 - lineHeight) / 2
 
                         val drawX = logicalX + xoff
                         val drawY = logicalY + ascent + yoff
@@ -180,7 +305,7 @@ class Font(path: String, val size: Int, val debugBorders: Boolean = false) {
                                 val atlasX = drawX + x
                                 val atlasY = drawY + y
 
-                                if (atlasX in 0..<atlasSize && atlasY in 0..< atlasSize) {
+                                if (atlasX in 0..<atlasSize && atlasY in 0..<atlasSize) {
                                     val atlasIdx = (atlasY * atlasSize + atlasX) * 4
                                     val alpha = bitmap.get(y * width + x)
 
@@ -194,113 +319,71 @@ class Font(path: String, val size: Int, val debugBorders: Boolean = false) {
 
                         stbtt_FreeBitmap(bitmap)
                     }
-
-                    if (debugBorders) {
-                        val borderStartX = cellX - CHAR_PADDING
-                        val borderStartY = cellY - CHAR_PADDING
-                        val borderWidth = maxCharSize
-                        val borderHeight = maxCharSize
-
-                        for (x in 0 until borderWidth) {
-                            val topX = borderStartX + x
-                            val topY = borderStartY
-                            val bottomY = borderStartY + borderHeight - 1
-
-                            if (topX in 0..<atlasSize) {
-                                if (topY in 0..<atlasSize) {
-                                    val idx = (topY * atlasSize + topX) * 4
-                                    atlasBuffer.put(idx + 0, 0xFF.toByte())
-                                    atlasBuffer.put(idx + 1, 0x00.toByte())
-                                    atlasBuffer.put(idx + 2, 0x00.toByte())
-                                    atlasBuffer.put(idx + 3, 0xFF.toByte())
-                                }
-                                if (bottomY in 0..<atlasSize) {
-                                    val idx = (bottomY * atlasSize + topX) * 4
-                                    atlasBuffer.put(idx + 0, 0xFF.toByte())
-                                    atlasBuffer.put(idx + 1, 0x00.toByte())
-                                    atlasBuffer.put(idx + 2, 0x00.toByte())
-                                    atlasBuffer.put(idx + 3, 0xFF.toByte())
-                                }
-                            }
-                        }
-
-                        for (y in 0 until borderHeight) {
-                            val leftX = borderStartX
-                            val rightX = borderStartX + borderWidth - 1
-                            val borderY = borderStartY + y
-
-                            if (borderY in 0..<atlasSize) {
-                                if (leftX in 0..<atlasSize) {
-                                    val idx = (borderY * atlasSize + leftX) * 4
-                                    atlasBuffer.put(idx + 0, 0xFF.toByte())
-                                    atlasBuffer.put(idx + 1, 0x00.toByte())
-                                    atlasBuffer.put(idx + 2, 0x00.toByte())
-                                    atlasBuffer.put(idx + 3, 0xFF.toByte())
-                                }
-                                if (rightX in 0..<atlasSize) {
-                                    val idx = (borderY * atlasSize + rightX) * 4
-                                    atlasBuffer.put(idx + 0, 0xFF.toByte())
-                                    atlasBuffer.put(idx + 1, 0x00.toByte())
-                                    atlasBuffer.put(idx + 2, 0x00.toByte())
-                                    atlasBuffer.put(idx + 3, 0xFF.toByte())
-                                }
-                            }
-                        }
-                    }
                 }
             }
+
+            val tempFile = File.createTempFile("font_atlas", ".png")
+            tempFile.deleteOnExit()
 
             if (!stbi_write_png(tempFile.absolutePath, atlasSize, atlasSize, 4, atlasBuffer, atlasSize * 4)) {
                 throw RuntimeException("Failed to write PNG atlas")
             }
 
             MemoryUtil.memFree(atlasBuffer)
-            atlasBuffer = null
 
             tempFile.copyTo(atlasFile, overwrite = true)
         }
 
-        imageFont = loadTextureWithLinearFilter(atlasFile.absolutePath)
-    }
-
-    private fun loadTextureWithLinearFilter(path: String): Texture {
-        val imageData = TextureManager.loadImage(path)
-        val textureId = glGenTextures()
-
-        TextureManager.bindTex(textureId)
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-
-        val format = TextureManager.getFormat(imageData.channels)
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, format,
-            imageData.width, imageData.height, 0,
-            format, GL_UNSIGNED_BYTE, imageData.buffer
-        )
-
-        TextureManager.unbindTex()
-        imageData.free()
-
-        return Texture(textureId, imageData.width, imageData.height)
-    }
-
-    private fun buildCharInfoModels(atlasWidth: Int, atlasHeight: Int) {
-        characterMap.values.forEach { info ->
-            info.buildModel(atlasWidth, atlasHeight)
+        private fun saveMetaFile(
+            metaFile: File,
+            path: String,
+            size: Int,
+            characterMap: Int2ObjectOpenHashMap<CharInfo>,
+            atlasSquareSize: Int,
+            atlasSize: Int
+        ) {
+            metaFile.bufferedWriter().use { writer ->
+                writer.write("path=$path\n")
+                writer.write("size=$size\n")
+                writer.write("atlasSquareSize=$atlasSquareSize\n")
+                writer.write("atlasSize=$atlasSize\n")
+                characterMap.forEach { (codepoint, info) ->
+                    writer.write("char=$codepoint,${info.inAtlasX},${info.inAtlasY}," +
+                            "${info.inAtlasWidth},${info.inAtlasHeight}," +
+                            "${info.xOffset},${info.yOffset},${info.advanceWidth}\n")
+                }
+            }
         }
-    }
 
-    private fun getCoords(index: Int, columns: Int, rows: Int): Pair<Int, Int> {
-        val x = index % columns
-        val y = index / columns
-        return Pair(x, y)
+        private fun loadTextureWithLinearFilter(path: String): RawTexture {
+            val imageData = TextureManager.loadImage(path)
+            val textureId = glGenTextures()
+
+            TextureManager.bindTex(textureId)
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+            val format = TextureManager.getFormat(imageData.channels)
+            glTexImage2D(
+                GL_TEXTURE_2D, 0, format,
+                imageData.width, imageData.height, 0,
+                format, GL_UNSIGNED_BYTE, imageData.buffer
+            )
+
+            TextureManager.unbindTex()
+            imageData.free()
+
+            return RawTexture(textureId, imageData.width, imageData.height)
+        }
     }
 
     fun getCharacter(codepoint: Char): CharInfo {
         return characterMap[codepoint.code] ?: characterMap['?'.code]!!
     }
+
+    override val font get() = this
 }

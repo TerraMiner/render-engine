@@ -3,6 +3,8 @@ package ua.terra.renderengine.util
 class Timer(ticksPerSecond: Int) {
     var partialTick: Float = 0f
         private set
+    var tickCount: Int = 0
+        internal set
 
     private var tickDelta: Float = 0f
     private var lastMs: Long = System.currentTimeMillis()

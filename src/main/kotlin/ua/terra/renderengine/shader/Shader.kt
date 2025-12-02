@@ -17,16 +17,35 @@ abstract class Shader(val fileName: String) {
     private var isRegistered = false
     protected val projectionBuffer: FloatBuffer = BufferUtils.createFloatBuffer(16)
 
-    protected abstract fun build(window: Window)
+    protected abstract fun build()
 
-    fun register(window: Window) {
+    fun register() {
         if (isRegistered) {
             println("Shader $fileName already registered!")
             return
         }
         program = glCreateProgram()
-        build(window)
         isRegistered = true
+        build()
+    }
+
+    fun reload() {
+        if (!isRegistered) {
+            throw IllegalStateException("Cannot reload shader $fileName - not registered yet!")
+        }
+
+        glDeleteProgram(program)
+
+        program = glCreateProgram()
+        build()
+
+        println("Shader $fileName reloaded successfully")
+    }
+
+    protected fun ensureRegistered() {
+        if (!isRegistered) {
+            throw IllegalStateException("Shader $fileName is not registered. Call register() first.")
+        }
     }
 
     fun loadVertexShader() {
@@ -56,12 +75,14 @@ abstract class Shader(val fileName: String) {
     }
 
     fun setProjection(value: Matrix4f) {
+        ensureRegistered()
         projectionBuffer.clear()
         value.get(projectionBuffer)
         glUniformMatrix4fv(projectionLoc, false, projectionBuffer)
     }
 
     fun bind() {
+        ensureRegistered()
         if (activeShaderProgram == program) return
         glUseProgram(program)
         activeShaderProgram = program

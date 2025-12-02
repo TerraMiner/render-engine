@@ -1,21 +1,20 @@
 plugins {
+    id 'java'
     id 'java-library'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version '2.0.21'
 }
 
 group = 'ua.terra'
-version = '1.0'
+version = '1.2'
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    api platform("org.jetbrains.kotlin:kotlin-bom")
-    api "org.jetbrains.kotlin:kotlin-stdlib"
+    api "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
 
-    api platform("org.lwjgl:lwjgl-bom:3.3.6")
     api "org.lwjgl:lwjgl:3.3.6"
     api "org.lwjgl:lwjgl-assimp:3.3.6"
     api "org.lwjgl:lwjgl-glfw:3.3.6"
@@ -23,16 +22,9 @@ dependencies {
     api "org.lwjgl:lwjgl-openal:3.3.6"
     api "org.lwjgl:lwjgl-opengl:3.3.6"
     api "org.lwjgl:lwjgl-stb:3.3.6"
+
     api "it.unimi.dsi:fastutil:8.5.15"
     api "org.joml:joml:1.10.5"
-
-    runtimeOnly "org.lwjgl:lwjgl::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-assimp::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-glfw::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-nfd::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-openal::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-opengl::natives-windows"
-    runtimeOnly "org.lwjgl:lwjgl-stb::natives-windows"
 }
 
 java {
@@ -44,8 +36,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId = 'ua.terra'
-            artifactId = 'render-engine'
-            version = '1.0'
+            artifactId = project.name
+            version = this.version
 
             from components.java
         }

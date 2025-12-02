@@ -1,4 +1,4 @@
-package ua.terra.renderengine.texture
+package ua.terra.renderengine.texture.model
 
 import org.lwjgl.stb.STBImage
 import org.lwjgl.system.MemoryUtil
