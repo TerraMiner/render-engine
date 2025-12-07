@@ -3,10 +3,14 @@ package ua.terra.renderengine.shader
 import org.joml.Matrix4f
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.GL20.*
-import ua.terra.renderengine.window.Window
 import java.nio.FloatBuffer
 import kotlin.system.exitProcess
 
+/**
+ * Base class for OpenGL shader programs.
+ * Handles shader compilation, linking, and basic uniform management.
+ * @property fileName Base name of the shader files (without extension)
+ */
 abstract class Shader(val fileName: String) {
     protected var program: Int = 0
 
@@ -30,9 +34,7 @@ abstract class Shader(val fileName: String) {
     }
 
     fun reload() {
-        if (!isRegistered) {
-            throw IllegalStateException("Cannot reload shader $fileName - not registered yet!")
-        }
+        check(isRegistered) { "Cannot reload shader $fileName - not registered yet!" }
 
         glDeleteProgram(program)
 
@@ -43,9 +45,7 @@ abstract class Shader(val fileName: String) {
     }
 
     protected fun ensureRegistered() {
-        if (!isRegistered) {
-            throw IllegalStateException("Shader $fileName is not registered. Call register() first.")
-        }
+        check(isRegistered) { "Shader $fileName is not registered. Call register() first." }
     }
 
     fun loadVertexShader() {
@@ -77,7 +77,7 @@ abstract class Shader(val fileName: String) {
     fun setProjection(value: Matrix4f) {
         ensureRegistered()
         projectionBuffer.clear()
-        value.get(projectionBuffer)
+        value[projectionBuffer]
         glUniformMatrix4fv(projectionLoc, false, projectionBuffer)
     }
 

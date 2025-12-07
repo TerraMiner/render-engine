@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration — Render Engine</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- highlight.js dark theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Integration Guide</h1>
+        <p class="subtitle">Add Render Engine to your project</p>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="integration.html" class="active">Integration</a></li>
+                <li><a href="examples.html">Examples</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="toc">
+            <h3>Contents</h3>
+            <ul>
+                <li><a href="#setup">Project Setup</a></li>
+                <li><a href="#keyboard">Keyboard</a></li>
+                <li><a href="#mouse">Mouse</a></li>
+                <li><a href="#camera">Camera</a></li>
+                <li><a href="#textures">Textures</a></li>
+                <li><a href="#fonts">Fonts</a></li>
+                <li><a href="#resources">Resource Packs</a></li>
+            </ul>
+        </div>
+
+        <section id="setup">
+            <h2>Project Setup</h2>
+
+            <h3>1. Create Game Class</h3>
+            <pre><code class="language-kotlin">package com.example.game
+
+import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+
+class Game : RenderEngineCore(
+    windowName = "My Game",
+    windowX = -1,           // -1 = centered
+    windowY = -1,
+    windowWidth = 1280,
+    windowHeight = 720,
+    tickRate = 60
+) {
+    override fun onEnable() {
+        // Load resources, setup input
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+    }
+
+    override fun tick() {
+        // Game logic (60 times/sec)
+    }
+
+    override fun onRender() {
+        // Rendering
+        renderEngine.flush()
+    }
+}</code></pre>
+
+            <h3>2. Create Entry Point</h3>
+            <pre><code class="language-kotlin">package com.example.game
+
+import org.lwjgl.glfw.GLFW.glfwInit
+
+fun main() {
+    check(glfwInit()) { "Failed to initialize GLFW" }
+    Game().enable()
+}</code></pre>
+
+            <h3>3. Organize Resources</h3>
+            <pre><code>src/main/resources/
+├── textures/
+│   ├── player.png
+│   └── tiles/
+│       └── grass.png
+├── fonts/
+│   └── main.ttf
+└── shaders/
+    ├── custom.vert
+    └── custom.frag</code></pre>
+        </section>
+
+        <section id="keyboard">
+            <h2>Keyboard</h2>
+            <pre><code class="language-kotlin">// Single press (fires once)
+keyboard.onKeyPress(GLFW_KEY_SPACE) {
+    player.jump()
+}
+
+// Held down (fires every frame)
+keyboard.onKeyPressed(GLFW_KEY_W) {
+    player.moveForward()
+}
+
+// Released
+keyboard.onKeyRelease(GLFW_KEY_SPACE) {
+    player.endJump()
+}
+
+// Text input
+keyboard.onCharInput { char ->
+    textField.append(char)
+}
+
+// Check state directly
+if (keyboard.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
+    player.run()
+}</code></pre>
+        </section>
+
+        <section id="mouse">
+            <h2>Mouse</h2>
+            <pre><code class="language-kotlin">// Click (fires once)
+mouse.onMouseClick(GLFW_MOUSE_BUTTON_LEFT) { x, y ->
+    shoot(x, y)
+}
+
+// Held (fires every frame)
+mouse.onMousePressed(GLFW_MOUSE_BUTTON_RIGHT) { x, y, lastX, lastY ->
+    camera.pan(lastX - x, lastY - y)
+}
+
+// Scroll
+mouse.onMouseScroll { offset ->
+    if (offset > 0) camera.zoomIn()
+    else camera.zoomOut()
+}
+
+// Movement
+mouse.onMouseMove { x, y, lastX, lastY ->
+    cursor.moveTo(x, y)
+}
+
+// Current position
+val mx = mouse.x
+val my = mouse.y</code></pre>
+        </section>
+
+        <section id="camera">
+            <h2>Camera</h2>
+            <pre><code class="language-kotlin">// Make player followable
+class Player : CameraTarget {
+    var x = 0f
+    var y = 0f
+    override fun getCameraPoint() = Point(x, y)
+}
+
+// Setup
+val player = Player()
+camera.initialize(player)
+camera.bounds = CameraBounds(0f, 0f, worldWidth, worldHeight)
+camera.minZoom = 0.5f
+camera.maxZoom = 4f
+
+// In tick()
+override fun tick() {
+    camera.tick()
+    player.update()
+}
+
+// In onRender()
+override fun onRender() {
+    // Convert screen to world coordinates
+    val worldX = camera.screenToSceneX(mouse.x)
+    val worldY = camera.screenToSceneY(mouse.y)
+
+    // Camera offset for rendering
+    val offset = camera.getOffset()
+
+    renderEngine.flush()
+}</code></pre>
+        </section>
+
+        <section id="textures">
+            <h2>Textures</h2>
+            <pre><code class="language-kotlin">// In onEnable()
+override fun onEnable() {
+    // Register textures for atlas
+    listOf(
+        "textures/player.png",
+        "textures/enemy.png",
+        "textures/tiles/grass.png"
+    ).forEach { path ->
+        val fullPath = ResourcePackManager.getResourcePath(path)
+        textureRegistry.registerForAtlas(fullPath)
+    }
+
+    // Build atlas (combines into one texture)
+    textureRegistry.buildAtlas()
+}
+
+// In onRender()
+override fun onRender() {
+    val tex = textureRegistry.getFromAtlas("textures/player.png")
+
+    renderEngine.spriteRenderer.renderSprite(
+        x = player.x,
+        y = player.y,
+        width = 64f,
+        height = 64f,
+        texture = tex
+    )
+
+    renderEngine.flush()
+}</code></pre>
+        </section>
+
+        <section id="fonts">
+            <h2>Fonts</h2>
+            <pre><code class="language-kotlin">// In onEnable()
+override fun onEnable() {
+    fontRegistry.register("ui", "fonts/Inter.ttf", 18)
+    fontRegistry.register("title", "fonts/Inter.ttf", 36)
+    fontRegistry.initialize()
+}
+
+// In onRender()
+override fun onRender() {
+    val uiFont = fontRegistry.get("ui")
+    val titleFont = fontRegistry.get("title")
+
+    renderEngine.textRenderer.renderText(
+        text = "My Game",
+        x = 50f,
+        y = 50f,
+        font = titleFont,
+        color = 0xFFFFFFFF.toInt()
+    )
+
+    renderEngine.textRenderer.renderText(
+        text = "Score: ${score}",
+        x = 50f,
+        y = 100f,
+        font = uiFont
+    )
+
+    renderEngine.flush()
+}</code></pre>
+        </section>
+
+        <section id="resources">
+            <h2>Resource Packs</h2>
+
+            <h3>Structure</h3>
+            <pre><code>game_folder/
+├── resourcepacks/
+│   ├── MyPack/
+│   │   ├── pack.json
+│   │   └── textures/
+│   │       └── player.png
+│   └── AnotherPack/
+│       └── ...
+└── resourcepacks.json</code></pre>
+
+            <h3>pack.json</h3>
+            <pre><code class="language-json">{
+    "name": "My Resource Pack",
+    "version": "1.0",
+    "description": "Custom textures"
+}</code></pre>
+
+            <h3>Usage</h3>
+            <pre><code class="language-kotlin">// Get resource (checks packs first, then JAR)
+val path = ResourcePackManager.getResourcePath("textures/player.png")
+
+// Pack management
+ResourcePackManager.enablePack("MyPack")
+ResourcePackManager.disablePack("MyPack")
+ResourcePackManager.movePackUp("MyPack")
+ResourcePackManager.movePackDown("MyPack")
+
+// Get lists
+val available = ResourcePackManager.getAvailablePacks()
+val active = ResourcePackManager.getActivePacks()
+
+// Rescan for new packs
+ResourcePackManager.rescan()</code></pre>
+        </section>
+    </div>
+
+    <footer>
+        <p>Render Engine — MIT License<br>Author: TerraMiner</p>
+    </footer>
+    <script>
+        hljs.highlightAll();
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    </script>
+</body>
+</html>

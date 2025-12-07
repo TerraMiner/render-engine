@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Render Engine — 2D Graphics Library for Kotlin</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- highlight.js dark theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Render Engine</h1>
+        <p class="subtitle">Lightweight 2D graphics library for Kotlin</p>
+        <span class="badge">v1.3 • Kotlin • OpenGL</span>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html" class="active">Home</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="integration.html">Integration</a></li>
+                <li><a href="examples.html">Examples</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section>
+            <p style="font-size: 1.1rem; color: var(--text-primary);">
+                Build games and interactive applications with a simple, powerful API.
+                Render Engine handles window management, rendering, input, and resources
+                so you can focus on your game.
+            </p>
+
+            <div class="btn-group">
+                <a href="architecture.html" class="btn btn-primary">Read Documentation</a>
+                <a href="examples.html" class="btn btn-secondary">View Examples</a>
+            </div>
+        </section>
+
+        <section>
+            <h2>Features</h2>
+            <div class="grid">
+                <div class="feature">
+                    <h4>🎨 Rendering</h4>
+                    <p>Sprites, shapes, and text with texture atlas optimization.</p>
+                </div>
+                <div class="feature">
+                    <h4>⌨️ Input</h4>
+                    <p>Keyboard and mouse events with press, hold, and release states.</p>
+                </div>
+                <div class="feature">
+                    <h4>📷 Camera</h4>
+                    <p>2D camera with zoom, smooth follow, and coordinate transforms.</p>
+                </div>
+                <div class="feature">
+                    <h4>🔤 Fonts</h4>
+                    <p>TrueType and OpenType support with Unicode rendering.</p>
+                </div>
+                <div class="feature">
+                    <h4>📦 Resources</h4>
+                    <p>Minecraft-style resource packs for easy modding.</p>
+                </div>
+                <div class="feature">
+                    <h4>⚡ Performance</h4>
+                    <p>Tick-render separation with automatic interpolation.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Quick Start</h2>
+            <p>Create a window and start rendering in just a few lines:</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+
+class MyGame : RenderEngineCore("My Game", -1, -1, 1280, 720, 60) {
+
+    override fun onEnable() {
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+    }
+
+    override fun tick() {
+        // Game logic at fixed rate (60/sec)
+    }
+
+    override fun onRender() {
+        // Rendering (can be faster than tick)
+        renderEngine.flush()
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    MyGame().enable()
+}</code></pre>
+        </section>
+
+        <section>
+            <h2>Documentation</h2>
+            <div class="grid">
+                <a href="architecture.html" class="feature" style="text-decoration: none;">
+                    <h4>Architecture</h4>
+                    <p>System design, components, and how they work together.</p>
+                </a>
+                <a href="integration.html" class="feature" style="text-decoration: none;">
+                    <h4>Integration</h4>
+                    <p>Step-by-step guide to add Render Engine to your project.</p>
+                </a>
+                <a href="examples.html" class="feature" style="text-decoration: none;">
+                    <h4>Examples</h4>
+                    <p>Complete working code from basic to advanced.</p>
+                </a>
+            </div>
+        </section>
+
+        <section>
+            <h2>Tech Stack</h2>
+            <ul>
+                <li><strong>Language:</strong> Kotlin 2.0+ (JVM)</li>
+                <li><strong>Graphics:</strong> OpenGL 3.3+ via LWJGL 3.3.6</li>
+                <li><strong>Window:</strong> GLFW</li>
+                <li><strong>Fonts:</strong> FreeType</li>
+                <li><strong>Build:</strong> Gradle</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer>
+        <p>Render Engine — MIT License<br>Author: TerraMiner</p>
+    </footer>
+    <script>
+        // highlight.js init
+        hljs.highlightAll();
+        // Active nav link
+        document.querySelectorAll('nav a').forEach(link => {
+            if (link.href === window.location.href) {
+                link.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>

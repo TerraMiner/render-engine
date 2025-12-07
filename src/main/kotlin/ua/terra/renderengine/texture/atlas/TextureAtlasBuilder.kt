@@ -1,30 +1,24 @@
 package ua.terra.renderengine.texture.atlas
 
-import org.lwjgl.opengl.GL11.GL_NEAREST
-import org.lwjgl.opengl.GL11.GL_RGBA
-import org.lwjgl.opengl.GL11.GL_TEXTURE_2D
-import org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER
-import org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER
-import org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_S
-import org.lwjgl.opengl.GL11.GL_TEXTURE_WRAP_T
-import org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE
-import org.lwjgl.opengl.GL11.glGenTextures
-import org.lwjgl.opengl.GL11.glTexImage2D
-import org.lwjgl.opengl.GL11.glTexParameteri
+import org.lwjgl.opengl.GL11.*
 import org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE
 import org.lwjgl.stb.STBImageWrite.stbi_write_png
 import org.lwjgl.system.MemoryUtil
-import ua.terra.renderengine.texture.model.ImageData
+import ua.terra.renderengine.resource.ResourceProvider
 import ua.terra.renderengine.texture.manager.TextureManager
+import ua.terra.renderengine.texture.model.ImageData
 import ua.terra.renderengine.texture.registry.TextureRegistry.Companion.BLANK_TEXTURE_PATH
 import ua.terra.renderengine.util.MAX_ATLAS_SIZE
-import ua.terra.renderengine.util.PathUtil
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.sqrt
 
+/**
+ * Builder for creating texture atlases from multiple texture files.
+ * Handles texture packing, atlas generation, and caching.
+ */
 object TextureAtlasBuilder {
 
     private data class PackedRect(
@@ -86,10 +80,10 @@ object TextureAtlasBuilder {
                     if (parts.size == 9) {
                         val path = parts[0]
                         regions[path] = AtlasRegion(
-                            uvX = parts[1].toFloat(),
-                            uvY = parts[2].toFloat(),
-                            uvMX = parts[3].toFloat(),
-                            uvMY = parts[4].toFloat(),
+                            minU = parts[1].toFloat(),
+                            minV = parts[2].toFloat(),
+                            maxU = parts[3].toFloat(),
+                            maxV = parts[4].toFloat(),
                             pixelX = parts[5].toInt(),
                             pixelY = parts[6].toInt(),
                             pixelWidth = parts[7].toInt(),
@@ -140,14 +134,14 @@ object TextureAtlasBuilder {
         return TexturesAtlas(textureId, atlasSize, atlasSize, regions)
     }
 
-    private fun prepareTextures(textures: Set<String>): MutableList<Pair<String, ImageData>> {
+    private fun prepareTextures(textures: Set<String>): List<Pair<String, ImageData>> {
         val loaded = mutableListOf<Pair<String, ImageData>>()
         loaded.add(BLANK_TEXTURE_PATH to blankTexture())
 
         textures.forEach {
             try {
-                val normalizedPath = PathUtil.normalize(it)
-                loaded.add(it to TextureManager.loadImage(normalizedPath))
+                val resourcePath = ResourceProvider.get().getResourcePath(it)
+                loaded.add(it to TextureManager.loadImage(resourcePath))
             } catch (e: Exception) {
                 System.err.println("Failed to load texture $it: ${e.message}")
                 throw e
@@ -308,13 +302,13 @@ object TextureAtlasBuilder {
 
     private fun createRegions(packed: List<PackedRect>, atlasSize: Int): Map<String, AtlasRegion> {
         return packed.associate { rect ->
-            val uvX = rect.x.toFloat() / atlasSize
-            val uvY = rect.y.toFloat() / atlasSize
-            val uvMX = (rect.x + rect.width).toFloat() / atlasSize
-            val uvMY = (rect.y + rect.height).toFloat() / atlasSize
+            val minU = rect.x.toFloat() / atlasSize
+            val minV = rect.y.toFloat() / atlasSize
+            val maxU = (rect.x + rect.width).toFloat() / atlasSize
+            val maxV = (rect.y + rect.height).toFloat() / atlasSize
 
             rect.path to AtlasRegion(
-                uvX, uvY, uvMX, uvMY,
+                minU, minV, maxU, maxV,
                 rect.x, rect.y, rect.width, rect.height
             )
         }
@@ -333,7 +327,7 @@ object TextureAtlasBuilder {
             writer.write("paths=${(textures + BLANK_TEXTURE_PATH).joinToString(";")}\n")
 
             regions.forEach { (path, region) ->
-                writer.write("region=$path,${region.uvX},${region.uvY},${region.uvMX},${region.uvMY}," +
+                writer.write("region=$path,${region.minU},${region.minV},${region.maxU},${region.maxV}," +
                         "${region.pixelX},${region.pixelY},${region.pixelWidth},${region.pixelHeight}\n")
             }
         }

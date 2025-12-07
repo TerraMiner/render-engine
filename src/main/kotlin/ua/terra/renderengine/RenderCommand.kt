@@ -5,7 +5,7 @@ package ua.terra.renderengine
  *
  * x, y, w, h - object placement and size.
  *
- * uvX, uvY, uvMX, uvMY - rectangle for texture selection on atlas canvas.
+ * minU, minV, maxU, maxV - rectangle for texture selection on atlas canvas.
  *
  * r, g, b, a - texture color-filter options.
  *
@@ -27,10 +27,10 @@ sealed class RenderCommand {
     abstract var y: Float
     abstract var w: Float
     abstract var h: Float
-    abstract var uvX: Float
-    abstract var uvY: Float
-    abstract var uvMX: Float
-    abstract var uvMY: Float
+    abstract var minU: Float
+    abstract var minV: Float
+    abstract var maxU: Float
+    abstract var maxV: Float
     abstract var packedColor: Int
     abstract var t: Float
     abstract var rot: Float
@@ -50,10 +50,10 @@ sealed class RenderCommand {
         override var y = 0f
         override var w = 0f
         override var h = 0f
-        override var uvX = 0f
-        override var uvY = 0f
-        override var uvMX = 0f
-        override var uvMY = 0f
+        override var minU = 0f
+        override var minV = 0f
+        override var maxU = 0f
+        override var maxV = 0f
         override var packedColor = 0
         override var t = 0f
         override var rot = 0f
@@ -74,10 +74,10 @@ sealed class RenderCommand {
         override var y = 0f
         override var w = 0f
         override var h = 0f
-        override var uvX = 0f
-        override var uvY = 0f
-        override var uvMX = 0f
-        override var uvMY = 0f
+        override var minU = 0f
+        override var minV = 0f
+        override var maxU = 0f
+        override var maxV = 0f
         override var packedColor = 0
         override var t = 0f
         override var rot = 0f
@@ -92,16 +92,19 @@ sealed class RenderCommand {
         override var tE = 0f
     }
 
+    /**
+     * Render command for drawing geometry (rectangles, lines, etc.).
+     */
     class GeometryCommand : RenderCommand() {
         override var tId = 0
         override var x = 0f
         override var y = 0f
         override var w = 0f
         override var h = 0f
-        override var uvX = 0f
-        override var uvY = 0f
-        override var uvMX = 0f
-        override var uvMY = 0f
+        override var minU = 0f
+        override var minV = 0f
+        override var maxU = 0f
+        override var maxV = 0f
         override var packedColor = 0
         override var t = 0f
         override var rot = 0f

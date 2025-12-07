@@ -1,9 +1,14 @@
 package ua.terra.renderengine.texture.source
 
-import ua.terra.renderengine.texture.model.Model
 import ua.terra.renderengine.texture.manager.RawTexture
 import ua.terra.renderengine.texture.manager.TextureManager
+import ua.terra.renderengine.texture.model.Model
 
+/**
+ * Represents a standalone texture not part of an atlas.
+ * Lazily loads the texture from the file system.
+ * @property path The file path to the texture
+ */
 class SingleTexture(
     private val path: String
 ) : TextureHolder {

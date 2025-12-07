@@ -37,7 +37,9 @@ class RawTexture(
         unbind()
     }
 
+    /** Binds this texture to the current OpenGL context */
     fun bind() = TextureManager.bindTex(id)
 
+    /** Unbinds this texture from the current OpenGL context */
     fun unbind() = TextureManager.unbindTex()
 }

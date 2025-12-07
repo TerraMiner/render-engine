@@ -8,6 +8,10 @@ import org.lwjgl.opengl.GL13
 import org.lwjgl.stb.STBImage
 import ua.terra.renderengine.texture.model.ImageData
 
+/**
+ * Manager for OpenGL texture operations.
+ * Handles texture loading, binding, caching, and lifecycle management.
+ */
 object TextureManager {
 
     var boundTexture: Int = -1
@@ -62,9 +66,9 @@ object TextureManager {
         }
 
         return ImageData(
-            widthBuffer.get(0),
-            heightBuffer.get(0),
-            channels ?: channelsBuffer.get(0),
+            widthBuffer[0],
+            heightBuffer[0],
+            channels ?: channelsBuffer[0],
             data
         )
     }
@@ -72,7 +76,7 @@ object TextureManager {
     fun loadToGLFWImage(fileName: String, image: GLFWImage, channels: Int? = null): ImageData {
         val imageData = loadImage(fileName, channels)
         try {
-            image.set(imageData.width, imageData.height, imageData.buffer)
+            image[imageData.width, imageData.height] = imageData.buffer
         } catch (e: Exception) {
             imageData.free()
             throw IllegalStateException("Failed to set GLFW image from: $fileName", e)

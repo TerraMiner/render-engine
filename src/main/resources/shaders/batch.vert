@@ -97,6 +97,8 @@ void main() {
         }
     }
 
+    pos = floor(pos);
+
     gl_Position = projection * vec4(pos, 1.0, 1.0);
 
     texCoords = uvData.xy + vertex.zw * (uvData.zw - uvData.xy);

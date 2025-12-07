@@ -2,15 +2,14 @@ package ua.terra.renderengine.renderer
 
 import ua.terra.renderengine.RenderEngine
 import ua.terra.renderengine.RenderType
-import ua.terra.renderengine.text.TextEffect
-import ua.terra.renderengine.text.TextHorAlignment
-import ua.terra.renderengine.text.TextHorPosition
-import ua.terra.renderengine.text.TextVerAlignment
-import ua.terra.renderengine.text.TextVerPosition
-import ua.terra.renderengine.text.fonts.Font
+import ua.terra.renderengine.text.*
 import ua.terra.renderengine.text.fonts.FontHolder
 import kotlin.math.round
 
+/**
+ * Renderer for drawing text using bitmap fonts.
+ * Supports text alignment, positioning, rotation, and various text effects.
+ */
 class TextRenderer(private val engine: RenderEngine) {
 
     fun render(params: TextRenderParams) {
@@ -94,8 +93,8 @@ class TextRenderer(private val engine: RenderEngine) {
                         alignedY - (charInfo.yOffset * scale),
                         charInfo.inAtlasWidth * scale,
                         charInfo.inAtlasHeight * scale,
-                        charInfo.model.uvX, charInfo.model.uvY,
-                        charInfo.model.uvMX, charInfo.model.uvMY,
+                        charInfo.model.minU, charInfo.model.minV,
+                        charInfo.model.maxU, charInfo.model.maxV,
                         zIndex,
                         color,
                         outlineThickness, angle,

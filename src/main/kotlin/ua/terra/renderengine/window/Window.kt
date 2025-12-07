@@ -11,15 +11,15 @@ import org.lwjgl.opengl.GL.createCapabilities
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.system.MemoryUtil.NULL
 import ua.terra.renderengine.RenderEngineCore
+import ua.terra.renderengine.resource.ResourceProvider
 import ua.terra.renderengine.texture.manager.TextureManager
-import ua.terra.renderengine.util.Color
-import ua.terra.renderengine.util.DEFAULT_MAX_FPS
-import ua.terra.renderengine.util.MIN_WINDOW_HEIGHT
-import ua.terra.renderengine.util.MIN_WINDOW_WIDTH
-import ua.terra.renderengine.util.Timer
-import java.io.File
+import ua.terra.renderengine.util.*
 import kotlin.math.min
 
+/**
+ * Represents the application window.
+ * Handles window creation, event polling, and basic window operations.
+ */
 class Window(
     val name: String,
     var width: Int,
@@ -69,14 +69,26 @@ class Window(
 
     private var onResizeCallbacks = mutableListOf<(oldWidth: Int, oldHeight: Int, newWidth: Int, newHeight: Int) -> Unit>()
 
+    /**
+     * Registers a callback to be called when the window is resized.
+     * @param callback The callback function
+     */
     fun onResize(callback: (oldWidth: Int, oldHeight: Int, newWidth: Int, newHeight: Int) -> Unit) {
         onResizeCallbacks.add(callback)
     }
 
+    /**
+     * Registers a callback to be called when the window is resized.
+     * @param callback The callback function
+     */
     fun onResize(callback: () -> Unit) {
         onResizeCallbacks.add { _, _, _, _ -> callback() }
     }
 
+    /**
+     * Creates the window.
+     * Must be called before the window can be shown or used.
+     */
     fun create() {
         if (isCreated) {
             println("Window already created!")
@@ -89,10 +101,12 @@ class Window(
         isCreated = true
     }
 
+    /**
+     * Shows the window and prepares it for rendering.
+     * @param core The RenderEngineCore instance
+     */
     fun show(core: RenderEngineCore) {
-        if (!isCreated) {
-            throw IllegalStateException("Cannot show window - not created yet!")
-        }
+        check(isCreated) { "Cannot show window - not created yet!" }
         if (isShown) {
             println("Window already shown!")
             return
@@ -107,17 +121,23 @@ class Window(
         createCapabilities()
 
         setupRendering()
-        setupVisuals(core.resourcesPath)
+        setupVisuals()
 
         isShown = true
     }
 
+    /**
+     * Hides the window.
+     */
     fun hide() {
         if (!isShown) return
         glfwHideWindow(id)
         isShown = false
     }
 
+    /**
+     * Destroys the window and frees resources.
+     */
     fun destroy() {
         if (!isCreated) return
 
@@ -129,16 +149,22 @@ class Window(
         isShown = false
     }
 
+    /**
+     * Creates and shows the window.
+     * @param core The RenderEngineCore instance
+     */
     fun open(core: RenderEngineCore) {
         create()
         configureCallbacks(core)
         show(core)
     }
 
+    /**
+     * Starts the game loop.
+     * @param core The RenderEngineCore instance
+     */
     fun startGameLoop(core: RenderEngineCore) {
-        if (!isCreated || !isShown) {
-            throw IllegalStateException("Window must be created and shown before starting game loop!")
-        }
+        check(isCreated && isShown) { "Window must be created and shown before starting game loop!" }
 
         var lastFpsUpdateTime = System.nanoTime()
         var lastRenderTime = System.nanoTime()
@@ -165,6 +191,10 @@ class Window(
         close(core)
     }
 
+    /**
+     * Closes the window and terminates GLFW.
+     * @param core The RenderEngineCore instance
+     */
     fun close(core: RenderEngineCore) {
         core.disable()
         destroy()
@@ -219,9 +249,9 @@ class Window(
         vsync = false
     }
 
-    private fun setupVisuals(resourcesDir: String) {
-        setWindowIcon(resourcesDir)
-        setCursorIcon(resourcesDir)
+    private fun setupVisuals() {
+        setWindowIconSafe()
+        setCursorIconSafe()
     }
 
     private fun processInput(metrics: Metrics) {
@@ -306,31 +336,45 @@ class Window(
         glfwSetWindowPos(id, targetX, targetY)
     }
 
-    private fun setCursorIcon(resourcesDir: String) {
-        val image = GLFWImage.create()
-        val cursorPath = File(resourcesDir, "cursor/cursor.png").absolutePath
-        val data = TextureManager.loadToGLFWImage(cursorPath, image, 4)
-        val cursor = glfwCreateCursor(image, 0, 0)
-        glfwSetCursor(id, cursor)
-        data.free()
+    private fun setCursorIconSafe() {
+        try {
+            val cursorPath = ResourceProvider.get().getResourcePath("cursor/cursor.png")
+
+            val image = GLFWImage.create()
+            val data = TextureManager.loadToGLFWImage(cursorPath, image, 4)
+            val cursor = glfwCreateCursor(image, 0, 0)
+            glfwSetCursor(id, cursor)
+            data.free()
+        } catch (e: Exception) {
+            println("Warning: Failed to load custom cursor: ${e.message}")
+        }
     }
 
-    private fun setWindowIcon(resourcesDir: String, vararg iconSizes: Int = intArrayOf(16, 32, 48, 64)) {
-        val icons = GLFWImage.malloc(iconSizes.size)
+    private fun setWindowIconSafe(vararg iconSizes: Int = intArrayOf(16, 32, 48, 64)) {
+        try {
+            val resourceProvider = ResourceProvider.get()
 
-        val imageDatas = iconSizes.mapIndexed { index, size ->
-            val iconPath = File(resourcesDir, "icons/icon_${size}x${size}.png").absolutePath
-            TextureManager.loadToGLFWImageBuffer(
-                iconPath,
-                index,
-                icons,
-                4
-            )
+            val availableIcons = iconSizes.filter { size ->
+                resourceProvider.resourceExists("icons/icon_${size}x${size}.png")
+            }
+
+            if (availableIcons.isEmpty()) {
+                println("Warning: No window icons found, using default system icon")
+                return
+            }
+
+            val icons = GLFWImage.malloc(availableIcons.size)
+            val imageDatas = availableIcons.mapIndexed { index, size ->
+                val iconPath = resourceProvider.getResourcePath("icons/icon_${size}x${size}.png")
+                TextureManager.loadToGLFWImageBuffer(iconPath, index, icons, 4)
+            }
+
+            glfwSetWindowIcon(id, icons)
+
+            imageDatas.forEach { it.free() }
+            icons.free()
+        } catch (e: Exception) {
+            println("Warning: Failed to load window icons: ${e.message}")
         }
-
-        glfwSetWindowIcon(id, icons)
-
-        imageDatas.forEach { it.free() }
-        icons.free()
     }
 }

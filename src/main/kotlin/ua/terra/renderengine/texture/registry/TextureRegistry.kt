@@ -2,15 +2,19 @@ package ua.terra.renderengine.texture.registry
 
 import org.lwjgl.opengl.GL11.glDeleteTextures
 import org.lwjgl.system.MemoryUtil
-import ua.terra.renderengine.RenderEngineCore
+import ua.terra.renderengine.resource.ResourceProvider
 import ua.terra.renderengine.texture.atlas.AtlasTexture
-import ua.terra.renderengine.texture.atlas.TexturesAtlas
 import ua.terra.renderengine.texture.atlas.TextureAtlasBuilder
+import ua.terra.renderengine.texture.atlas.TexturesAtlas
 import ua.terra.renderengine.texture.manager.RawTexture
 import ua.terra.renderengine.texture.source.SingleTexture
 import ua.terra.renderengine.texture.source.TextureHolder
 import ua.terra.renderengine.util.DEFAULT_ATLAS_PADDING
 
+/**
+ * Registry for managing textures, both as individual textures and within atlases.
+ * Provides texture registration, atlas building, and texture access.
+ */
 class TextureRegistry {
     private lateinit var atlas: TexturesAtlas
 
@@ -36,9 +40,7 @@ class TextureRegistry {
     }
 
     fun getFromAtlas(path: String): TextureHolder {
-        if (!isBuilt) {
-            throw IllegalStateException("Atlas not built yet! Call buildAtlas() first.")
-        }
+        check(isBuilt) { "Atlas not built yet! Call buildAtlas() first." }
         return textureCache[path] ?: throw IllegalArgumentException("Texture $path not registered in atlas")
     }
 
@@ -65,7 +67,7 @@ class TextureRegistry {
             throw UnsupportedOperationException("Atlas already built!")
         }
 
-        val cachePath = "${RenderEngineCore.getCoreApi().cachePath}/textures"
+        val cachePath = "${ResourceProvider.get().getCachePath()}/textures"
         atlas = TextureAtlasBuilder.build(registeredPaths, cachePath, padding)
 
         registeredPaths.forEach { path ->
@@ -77,9 +79,7 @@ class TextureRegistry {
     }
 
     fun reload(cachePath: String, padding: Int = DEFAULT_ATLAS_PADDING) {
-        if (!isBuilt) {
-            throw IllegalStateException("Cannot reload atlas - not built yet!")
-        }
+        check(isBuilt) { "Cannot reload atlas - not built yet!" }
 
         println("Reloading texture atlas...")
 

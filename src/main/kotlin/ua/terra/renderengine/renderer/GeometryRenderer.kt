@@ -5,7 +5,10 @@ import ua.terra.renderengine.RenderType
 import ua.terra.renderengine.texture.model.Model
 import ua.terra.renderengine.texture.registry.TextureRegistry
 
-
+/**
+ * Renderer for drawing geometric shapes (rectangles, lines, etc.).
+ * Uses a blank texture internally for solid color rendering.
+ */
 class GeometryRenderer(
     private val engine: RenderEngine,
     private val textureRegistry: TextureRegistry
@@ -27,10 +30,10 @@ class GeometryRenderer(
         engine.submitCommand(
             blankTexture.id,
             x, y, width, height,
-            blankModel.uvX,
-            blankModel.uvY,
-            blankModel.uvMX,
-            blankModel.uvMY,
+            blankModel.minU,
+            blankModel.minV,
+            blankModel.maxU,
+            blankModel.maxV,
             zIndex, color,
             thickness, angle,
             ignoreZoom, ignoreCamera,
@@ -50,10 +53,10 @@ class GeometryRenderer(
         engine.submitCommand(
             blankTexture.id,
             x, y, width, height,
-            blankModel.uvX,
-            blankModel.uvY,
-            blankModel.uvMX,
-            blankModel.uvMY,
+            blankModel.minU,
+            blankModel.minV,
+            blankModel.maxU,
+            blankModel.maxV,
             zIndex, color,
             1f, angle,
             ignoreZoom, ignoreCamera,
@@ -73,10 +76,10 @@ class GeometryRenderer(
         engine.submitCommand(
             blankTexture.id,
             x1, y1, x2, y2,
-            blankModel.uvX,
-            blankModel.uvY,
-            blankModel.uvMX,
-            blankModel.uvMY,
+            blankModel.minU,
+            blankModel.minV,
+            blankModel.maxU,
+            blankModel.maxV,
             zIndex,
             color,
             thickness, 0f,

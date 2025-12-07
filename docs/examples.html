@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examples — Render Engine</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- highlight.js dark theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Examples</h1>
+        <p class="subtitle">Complete working code samples</p>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="integration.html">Integration</a></li>
+                <li><a href="examples.html" class="active">Examples</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="toc">
+            <h3>Examples</h3>
+            <ul>
+                <li><a href="#minimal">Minimal App</a></li>
+                <li><a href="#player">Player with Camera</a></li>
+                <li><a href="#ui">Text & UI</a></li>
+                <li><a href="#input">Input Handling</a></li>
+                <li><a href="#animation">Animation</a></li>
+            </ul>
+        </div>
+
+        <section id="minimal">
+            <h2>Minimal App</h2>
+            <p>The simplest possible application — opens a window that closes on ESC.</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+
+class MinimalApp : RenderEngineCore(
+    "Minimal App",
+    -1, -1,     // centered
+    800, 600,   // size
+    60          // tick rate
+) {
+    override fun onEnable() {
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) {
+            window.close()
+        }
+    }
+
+    override fun tick() {
+        // Game logic here
+    }
+
+    override fun onRender() {
+        renderEngine.flush()
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    MinimalApp().enable()
+}</code></pre>
+
+            <div class="card mt-2">
+                <h4>Key Points</h4>
+                <ul>
+                    <li>Extend <code>RenderEngineCore</code></li>
+                    <li>Implement <code>onEnable()</code>, <code>tick()</code>, <code>onRender()</code></li>
+                    <li>Call <code>glfwInit()</code> before creating engine</li>
+                    <li>Call <code>enable()</code> to start</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="player">
+            <h2>Player with Camera</h2>
+            <p>Controllable player with a camera that follows.</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+import ua.terra.renderengine.camera.CameraTarget
+import ua.terra.renderengine.camera.CameraBounds
+import ua.terra.renderengine.util.Point
+
+class GameWithPlayer : RenderEngineCore(
+    "Player Demo", -1, -1, 1280, 720, 60
+) {
+    private lateinit var player: Player
+
+    override fun onEnable() {
+        player = Player(640f, 360f)
+
+        // Camera follows player
+        camera.initialize(player)
+        camera.bounds = CameraBounds(0f, 0f, 1280f, 720f)
+        camera.minZoom = 0.5f
+        camera.maxZoom = 3f
+
+        // Movement
+        keyboard.onKeyPressed(GLFW_KEY_W) { player.vy = -3f }
+        keyboard.onKeyPressed(GLFW_KEY_S) { player.vy = 3f }
+        keyboard.onKeyPressed(GLFW_KEY_A) { player.vx = -3f }
+        keyboard.onKeyPressed(GLFW_KEY_D) { player.vx = 3f }
+
+        // Zoom
+        keyboard.onKeyPress(GLFW_KEY_EQUAL) { camera.zoomIn() }
+        keyboard.onKeyPress(GLFW_KEY_MINUS) { camera.zoomOut() }
+
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+    }
+
+    override fun tick() {
+        camera.tick()
+        player.update()
+    }
+
+    override fun onRender() {
+        // Draw player as rectangle
+        renderEngine.geometryRenderer.renderRectangle(
+            player.x - 16f, player.y - 16f,
+            32f, 32f,
+            color = 0xFFFFFFFF.toInt()
+        )
+        renderEngine.flush()
+    }
+}
+
+class Player(var x: Float, var y: Float) : CameraTarget {
+    var vx = 0f
+    var vy = 0f
+
+    override fun getCameraPoint() = Point(x, y)
+
+    fun update() {
+        x = (x + vx).coerceIn(0f, 1280f)
+        y = (y + vy).coerceIn(0f, 720f)
+        vx = 0f
+        vy = 0f
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    GameWithPlayer().enable()
+}</code></pre>
+
+            <div class="card mt-2">
+                <h4>Key Points</h4>
+                <ul>
+                    <li>Implement <code>CameraTarget</code> for followable objects</li>
+                    <li>Call <code>camera.tick()</code> every tick</li>
+                    <li>Use <code>camera.screenToScene()</code> to convert coordinates</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="ui">
+            <h2>Text & UI</h2>
+            <p>Rendering text with different fonts and sizes.</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+import ua.terra.renderengine.resource.ResourcePackManager
+
+class UIDemo : RenderEngineCore(
+    "UI Demo", -1, -1, 1024, 768, 60
+) {
+    private var showDebug = true
+
+    override fun onEnable() {
+        // Register fonts
+        fontRegistry.register("ui",
+            ResourcePackManager.getResourcePath("fonts/Inter.ttf"), 18)
+        fontRegistry.register("title",
+            ResourcePackManager.getResourcePath("fonts/Inter.ttf"), 48)
+        fontRegistry.initialize()
+
+        keyboard.onKeyPress(GLFW_KEY_F3) { showDebug = !showDebug }
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+    }
+
+    override fun tick() {}
+
+    override fun onRender() {
+        val title = fontRegistry.get("title")
+        val ui = fontRegistry.get("ui")
+
+        // Title
+        renderEngine.textRenderer.renderText(
+            "My Game",
+            x = 50f, y = 50f,
+            font = title,
+            color = 0xFFFFFFFF.toInt()
+        )
+
+        // FPS
+        renderEngine.textRenderer.renderText(
+            "FPS: ${metrics.fps.toInt()}",
+            x = 50f, y = 120f,
+            font = ui
+        )
+
+        // Debug info
+        if (showDebug) {
+            renderEngine.textRenderer.renderText(
+                "Press F3 to toggle debug",
+                x = 50f, y = 150f,
+                font = ui,
+                color = 0xFF888888.toInt()
+            )
+        }
+
+        renderEngine.flush()
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    UIDemo().enable()
+}</code></pre>
+        </section>
+
+        <section id="input">
+            <h2>Input Handling</h2>
+            <p>Complete keyboard and mouse input with cooldowns.</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+import ua.terra.renderengine.util.Cooldown
+
+class InputDemo : RenderEngineCore(
+    "Input Demo", -1, -1, 1280, 720, 60
+) {
+    private var mouseX = 0f
+    private var mouseY = 0f
+    private var clickX = 0f
+    private var clickY = 0f
+    private val clickCooldown = Cooldown(300)
+
+    override fun onEnable() {
+        // Keyboard
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+        keyboard.onKeyPress(GLFW_KEY_SPACE) { println("Jump!") }
+        keyboard.onKeyPressed(GLFW_KEY_W) { println("Moving...") }
+        keyboard.onKeyRelease(GLFW_KEY_SPACE) { println("Jump ended") }
+
+        // Mouse
+        mouse.onMouseMove { x, y, _, _ ->
+            mouseX = x.toFloat()
+            mouseY = y.toFloat()
+        }
+
+        mouse.onMouseClick(GLFW_MOUSE_BUTTON_LEFT) { x, y ->
+            if (clickCooldown.isEnded()) {
+                clickX = x.toFloat()
+                clickY = y.toFloat()
+                clickCooldown.start()
+            }
+        }
+
+        mouse.onMouseScroll { offset ->
+            println("Scroll: $offset")
+        }
+    }
+
+    override fun tick() {}
+
+    override fun onRender() {
+        // Cursor indicator
+        renderEngine.geometryRenderer.renderRectangle(
+            mouseX - 4f, mouseY - 4f, 8f, 8f,
+            color = 0xFF00FF00.toInt()
+        )
+
+        // Click marker
+        if (clickX != 0f) {
+            renderEngine.geometryRenderer.renderRectangle(
+                clickX - 10f, clickY - 10f, 20f, 20f,
+                color = 0xFFFF0000.toInt()
+            )
+        }
+
+        renderEngine.flush()
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    InputDemo().enable()
+}</code></pre>
+
+            <div class="card mt-2">
+                <h4>Input Types</h4>
+                <ul>
+                    <li><code>onKeyPress</code> — once on key down</li>
+                    <li><code>onKeyPressed</code> — every frame while held</li>
+                    <li><code>onKeyRelease</code> — once on key up</li>
+                    <li><code>Cooldown</code> — prevents action spam</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="animation">
+            <h2>Animation</h2>
+            <p>Basic animation with physics.</p>
+
+            <pre><code class="language-kotlin">import org.lwjgl.glfw.GLFW.*
+import ua.terra.renderengine.RenderEngineCore
+import kotlin.math.sin
+
+class AnimationDemo : RenderEngineCore(
+    "Animation", -1, -1, 1280, 720, 60
+) {
+    private var rotation = 0f
+    private var ballY = 200f
+    private var ballVelocity = 0f
+    private val gravity = 0.5f
+
+    override fun onEnable() {
+        keyboard.onKeyPress(GLFW_KEY_ESCAPE) { window.close() }
+    }
+
+    override fun tick() {
+        // Rotation
+        rotation += 2f
+        if (rotation >= 360f) rotation -= 360f
+
+        // Bouncing ball
+        ballVelocity += gravity
+        ballY += ballVelocity
+        if (ballY >= 600f) {
+            ballY = 600f
+            ballVelocity *= -0.8f
+        }
+    }
+
+    override fun onRender() {
+        // Rotating square
+        renderEngine.geometryRenderer.renderRectangle(
+            200f - 30f, 200f - 30f, 60f, 60f,
+            rotation = rotation.toDouble(),
+            color = 0xFF3B82F6.toInt()
+        )
+
+        // Bouncing ball
+        renderEngine.geometryRenderer.renderCircle(
+            500f, ballY, 30f,
+            color = 0xFFEF4444.toInt()
+        )
+
+        // Sine wave
+        val t = (System.currentTimeMillis() % 2000) / 2000f
+        val waveX = 700f + t * 400f
+        val waveY = 400f + sin(t * Math.PI * 4).toFloat() * 100f
+        renderEngine.geometryRenderer.renderCircle(
+            waveX, waveY, 15f,
+            color = 0xFF22C55E.toInt()
+        )
+
+        renderEngine.flush()
+    }
+}
+
+fun main() {
+    check(glfwInit()) { "Failed to init GLFW" }
+    AnimationDemo().enable()
+}</code></pre>
+
+            <div class="card mt-2">
+                <h4>Animation Tips</h4>
+                <ul>
+                    <li>Update state in <code>tick()</code></li>
+                    <li>Render current state in <code>onRender()</code></li>
+                    <li>Engine interpolates automatically between ticks</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>Render Engine — MIT License<br>Author: TerraMiner</p>
+    </footer>
+
+    <script>
+        hljs.highlightAll();
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    </script>
+</body>
+</html>

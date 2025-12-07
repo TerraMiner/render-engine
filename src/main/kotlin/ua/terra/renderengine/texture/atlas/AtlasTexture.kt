@@ -1,9 +1,15 @@
 package ua.terra.renderengine.texture.atlas
 
-import ua.terra.renderengine.texture.source.TextureHolder
-import ua.terra.renderengine.texture.model.Model
 import ua.terra.renderengine.texture.manager.TextureManager
+import ua.terra.renderengine.texture.model.Model
+import ua.terra.renderengine.texture.source.TextureHolder
 
+/**
+ * Represents a texture within a texture atlas.
+ * Lazily loads region and model data from the atlas.
+ * @property atlas The parent texture atlas
+ * @property path The path/name of the texture in the atlas
+ */
 class AtlasTexture(
     private val atlas: TexturesAtlas,
     private val path: String

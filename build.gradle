@@ -14,6 +14,7 @@ repositories {
 
 dependencies {
     api "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
+    api "com.google.code.gson:gson:2.11.0"
 
     api "org.lwjgl:lwjgl:3.3.6"
     api "org.lwjgl:lwjgl-assimp:3.3.6"

@@ -7,6 +7,10 @@ import ua.terra.renderengine.texture.manager.RawTexture
 import ua.terra.renderengine.texture.model.Model
 import ua.terra.renderengine.texture.source.TextureHolder
 
+/**
+ * Renderer for drawing textured quads.
+ * Provides various overloads for rendering textures with different parameters.
+ */
 class TextureRenderer(private val engine: RenderEngine) {
 
     fun render(
@@ -65,7 +69,7 @@ class TextureRenderer(private val engine: RenderEngine) {
         engine.submitCommand(
             textureId,
             x, y, width, height,
-            model.uvX, model.uvY, model.uvMX, model.uvMY,
+            model.minU, model.minV, model.maxU, model.maxV,
             zIndex, color,
             thickness, angle,
             ignoreZoom, ignoreCamera,

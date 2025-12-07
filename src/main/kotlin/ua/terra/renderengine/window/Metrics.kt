@@ -2,6 +2,11 @@ package ua.terra.renderengine.window
 
 import ua.terra.renderengine.util.Timer
 
+/**
+ * Performance metrics tracker for the render engine.
+ * Collects and reports FPS, TPS, and various timing measurements.
+ * @property tickRate Target ticks per second
+ */
 open class Metrics(tickRate: Int) {
     var tpsLag = MeasurementField()
     var videoLag = MeasurementField()
@@ -16,6 +21,9 @@ open class Metrics(tickRate: Int) {
 
     val timer: Timer = Timer(tickRate)
 
+    /**
+     * Returns formatted statistics string with all metrics.
+     */
     fun getStats(): String {
         return "FPS: $framesPerSecond\n" +
             "TPS: $ticksPerSecond\n" +
@@ -27,29 +35,5 @@ open class Metrics(tickRate: Int) {
             "Video Lag: ${videoLag}ms\n" +
             "Poll Lag: ${pollLag}ms"
     }
-
-    class MeasurementField() {
-        private var field: Double = .0
-        fun measure(block: () -> Unit) {
-            val start = System.nanoTime()
-            block()
-            field = (System.nanoTime() - start) / 1_000_000.0
-        }
-        fun getValue() = field
-        override fun toString() = getValue().toString()
-    }
-
-    class IncBufferedField() {
-        private var incremental = 0
-        private var field: Int = 0
-        fun increase() {
-            incremental++
-        }
-        fun flush() {
-            field = incremental
-            incremental = 0
-        }
-        fun getValue() = field
-        override fun toString() = getValue().toString()
-    }
 }
+

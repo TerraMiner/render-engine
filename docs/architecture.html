@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture — Render Engine</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- highlight.js dark theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/kotlin.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Architecture</h1>
+        <p class="subtitle">System design and component overview</p>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="architecture.html" class="active">Architecture</a></li>
+                <li><a href="integration.html">Integration</a></li>
+                <li><a href="examples.html">Examples</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="toc">
+            <h3>Contents</h3>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#components">Components</a></li>
+                <li><a href="#lifecycle">Application Lifecycle</a></li>
+                <li><a href="#timing">Timing & Interpolation</a></li>
+                <li><a href="#input">Input Processing</a></li>
+                <li><a href="#extending">Extending</a></li>
+            </ul>
+        </div>
+
+        <section id="overview">
+            <h2>Overview</h2>
+            <p>
+                Render Engine is a 2D graphics library built on OpenGL and LWJGL.
+                It provides a complete framework for games and interactive applications
+                with a clean separation between logic updates (tick) and rendering.
+            </p>
+        </section>
+
+        <section id="components">
+            <h2>Components</h2>
+
+            <div class="card">
+                <h4>RenderEngineCore</h4>
+                <p>Base class for all applications. Manages the game loop, window, and provides access to all subsystems.</p>
+                <ul>
+                    <li><code>onEnable()</code> — initialization</li>
+                    <li><code>tick()</code> — logic update (fixed rate, default 60/sec)</li>
+                    <li><code>onRender()</code> — rendering (variable rate)</li>
+                    <li><code>onDisable()</code> — cleanup</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h4>Input System</h4>
+                <p>Keyboard and mouse handling with three event types:</p>
+                <ul>
+                    <li><strong>Press</strong> — fires once when key/button goes down</li>
+                    <li><strong>Pressed</strong> — fires every frame while held</li>
+                    <li><strong>Release</strong> — fires once when released</li>
+                </ul>
+                <pre><code class="language-kotlin">keyboard.onKeyPress(GLFW_KEY_SPACE) { jump() }
+keyboard.onKeyPressed(GLFW_KEY_W) { moveForward() }
+mouse.onMouseClick(GLFW_MOUSE_BUTTON_LEFT) { x, y -> shoot(x, y) }
+mouse.onMouseScroll { offset -> zoom(offset) }</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Camera</h4>
+                <p>2D camera with target following, zoom, and coordinate transformation.</p>
+                <pre><code class="language-kotlin">camera.initialize(player)  // Follow player
+camera.bounds = CameraBounds(0f, 0f, worldWidth, worldHeight)
+camera.minZoom = 0.5f
+camera.maxZoom = 3f
+
+// In onRender:
+val worldPos = camera.screenToScene(screenX, screenY)</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Resource System</h4>
+                <p>Minecraft-style resource packs with priority ordering and fallback to JAR resources.</p>
+                <pre><code class="language-kotlin">// Automatically checks resource packs first, then JAR
+val path = ResourcePackManager.getResourcePath("textures/player.png")
+
+// Manage packs
+ResourcePackManager.enablePack("MyPack")
+ResourcePackManager.movePackUp("MyPack")</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Texture Registry</h4>
+                <p>Automatic texture atlas generation for draw call optimization.</p>
+                <pre><code class="language-kotlin">textureRegistry.registerForAtlas("textures/player.png")
+textureRegistry.registerForAtlas("textures/enemy.png")
+textureRegistry.buildAtlas()
+
+val tex = textureRegistry.getFromAtlas("textures/player.png")</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Font Registry</h4>
+                <p>TrueType/OpenType fonts with Unicode support.</p>
+                <pre><code class="language-kotlin">fontRegistry.register("main", "fonts/Inter.ttf", 24)
+fontRegistry.register("title", "fonts/Inter.ttf", 48)
+fontRegistry.initialize()
+
+val font = fontRegistry.get("main")</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Render Engine</h4>
+                <p>Low-level rendering with sprite, geometry, and text renderers.</p>
+                <pre><code class="language-kotlin">renderEngine.spriteRenderer.renderSprite(x, y, w, h, texture)
+renderEngine.geometryRenderer.renderRectangle(x, y, w, h, color)
+renderEngine.textRenderer.renderText("Score: 100", x, y, font)
+renderEngine.flush()  // Send to GPU</code></pre>
+            </div>
+
+            <div class="card">
+                <h4>Utilities</h4>
+                <pre><code class="language-kotlin">// Cooldown timer
+val attackCooldown = Cooldown(500)  // 500ms
+if (attackCooldown.isEnded()) {
+    attack()
+    attackCooldown.start()
+}
+
+// 2D Point
+val pos = Point(100f, 200f)
+
+// Colors
+val color = Color.RED.rgba</code></pre>
+            </div>
+        </section>
+
+        <section id="lifecycle">
+            <h2>Application Lifecycle</h2>
+            <ol>
+                <li><b>main()</b> — точка входа, инициализация GLFW</li>
+                <li><b>Engine.enable()</b> — запуск движка и открытие окна</li>
+                <li><b>onEnable()</b> — инициализация ресурсов, настройка игры</li>
+                <li><b>Game Loop</b> — основной цикл:
+                    <ul>
+                        <li><b>tick()</b> — обновление логики (фиксированная частота, по умолчанию 60 раз/сек)</li>
+                        <li><b>onRender()</b> — отрисовка (максимально возможная частота)</li>
+                    </ul>
+                </li>
+                <li><b>onDisable()</b> — освобождение ресурсов, закрытие окна</li>
+            </ol>
+        </section>
+        <section id="timing">
+            <h2>Timing & Interpolation</h2>
+            <p>
+                Движок разделяет обновление логики и рендеринг. Логика обновляется с фиксированной частотой (tick), а отрисовка может происходить чаще. Для плавности используется интерполяция между состояниями.<br>
+                <b>Основные параметры:</b>
+            </p>
+            <ul>
+                <li><b>tickRate</b> — количество логических обновлений в секунду (по умолчанию 60)</li>
+                <li><b>partialTick</b> — число от 0 до 1, отражающее прогресс между двумя tick</li>
+                <li><b>fps</b> — текущий FPS</li>
+            </ul>
+            <p>
+                Для плавной анимации используйте паттерн интерполяции:<br>
+                <code class="language-kotlin">val interpolated = lerp(statePrev, stateNext, partialTick)</code>
+            </p>
+            <p>
+                В классе <code>Interpolatable</code> реализуйте хранение двух состояний (текущее и предыдущее) и используйте <code>getInterpolatedState()</code> для отрисовки.
+            </p>
+        </section>
+        <section id="input">
+            <h2>Input Processing</h2>
+            <ul>
+                <li>События клавиатуры и мыши поступают из GLFW</li>
+                <li>Обработчики <code>onKeyPress</code>, <code>onKeyPressed</code>, <code>onKeyRelease</code> и аналогичные для мыши вызываются автоматически</li>
+                <li>События <b>Press/Release</b> срабатывают мгновенно, <b>Pressed</b> — каждую итерацию цикла</li>
+                <li>Вся обработка инпута происходит в <code>tick()</code> и <code>onRender()</code> через подписки</li>
+            </ul>
+        </section>
+
+        <section id="extending">
+            <h2>Extending</h2>
+
+            <h3>Custom Renderer</h3>
+            <pre><code class="language-kotlin">class MyEngine : RenderEngineCore(...) {
+    override fun setupRenderEngines() {
+        super.setupRenderEngines()
+        myRenderer = MyCustomRenderer()
+        myRenderer.register()
+    }
+}</code></pre>
+
+            <h3>Custom Resource Provider</h3>
+            <pre><code class="language-kotlin">object MyResources : ResourceProvider {
+    override fun getResourcePath(path: String): String {
+        // Custom resolution logic
+    }
+}
+
+ResourceProvider.register(MyResources)</code></pre>
+        </section>
+    </div>
+
+    <footer>
+        <p>Render Engine — MIT License<br>Author: TerraMiner</p>
+    </footer>
+
+    <script>
+        hljs.highlightAll();
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.addEventListener('click', e => {
+                e.preventDefault();
+                document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+    </script>
+</body>
+</html>

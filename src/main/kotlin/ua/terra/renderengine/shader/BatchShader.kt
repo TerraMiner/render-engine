@@ -3,8 +3,12 @@ package ua.terra.renderengine.shader
 import org.joml.Matrix4f
 import org.lwjgl.opengl.GL20.*
 import ua.terra.renderengine.RenderEngineCore
-import ua.terra.renderengine.window.Window
 
+/**
+ * Batch rendering shader for drawing multiple sprites in a single draw call.
+ * Handles camera transformations, texture sampling, and various rendering effects.
+ * @property path Path to the shader files
+ */
 class BatchShader(path: String = "shaders/batch") : Shader(path) {
     private var colorLoc: Int = 0
     private var samplerLoc: Int = 0

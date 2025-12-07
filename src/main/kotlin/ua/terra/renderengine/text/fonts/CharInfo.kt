@@ -2,6 +2,16 @@ package ua.terra.renderengine.text.fonts
 
 import ua.terra.renderengine.texture.model.Model
 
+/**
+ * Contains information about a character's position and metrics in a font atlas.
+ * @property inAtlasX The x-coordinate of the character in the atlas
+ * @property inAtlasY The y-coordinate of the character in the atlas
+ * @property inAtlasWidth The width of the character in the atlas
+ * @property inAtlasHeight The height of the character in the atlas
+ * @property xOffset Horizontal offset when rendering the character
+ * @property yOffset Vertical offset when rendering the character
+ * @property advanceWidth The horizontal advance to the next character
+ */
 class CharInfo(
     val inAtlasX: Int,
     val inAtlasY: Int,
@@ -14,10 +24,10 @@ class CharInfo(
     lateinit var model: Model
 
     fun buildModel(atlasWidth: Int, atlasHeight: Int) {
-        val uvx = inAtlasX.toFloat() / atlasWidth
-        val uvy = inAtlasY.toFloat() / atlasHeight
-        val uvmx = uvx + inAtlasWidth.toFloat() / atlasWidth
-        val uvmy = uvy + inAtlasHeight.toFloat() / atlasHeight
-        model = Model(uvx, uvy, uvmx, uvmy)
+        val minU = inAtlasX.toFloat() / atlasWidth
+        val minV = inAtlasY.toFloat() / atlasHeight
+        val maxU = minU + inAtlasWidth.toFloat() / atlasWidth
+        val maxV = minV + inAtlasHeight.toFloat() / atlasHeight
+        model = Model(minU, minV, maxU, maxV)
     }
 }
