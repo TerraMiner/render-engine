@@ -151,44 +151,44 @@ val color = Color.RED.rgba</code></pre>
         <section id="lifecycle">
             <h2>Application Lifecycle</h2>
             <ol>
-                <li><b>main()</b> — точка входа, инициализация GLFW</li>
-                <li><b>Engine.enable()</b> — запуск движка и открытие окна</li>
-                <li><b>onEnable()</b> — инициализация ресурсов, настройка игры</li>
-                <li><b>Game Loop</b> — основной цикл:
+                <li><b>main()</b> — entry point, GLFW initialization</li>
+                <li><b>Engine.enable()</b> — engine start and window creation</li>
+                <li><b>onEnable()</b> — resource initialization, game setup</li>
+                <li><b>Game Loop</b> — main loop:
                     <ul>
-                        <li><b>tick()</b> — обновление логики (фиксированная частота, по умолчанию 60 раз/сек)</li>
-                        <li><b>onRender()</b> — отрисовка (максимально возможная частота)</li>
+                        <li><b>tick()</b> — logic update (fixed rate, default 60/sec)</li>
+                        <li><b>onRender()</b> — rendering (max possible rate)</li>
                     </ul>
                 </li>
-                <li><b>onDisable()</b> — освобождение ресурсов, закрытие окна</li>
+                <li><b>onDisable()</b> — resource cleanup, window close</li>
             </ol>
         </section>
         <section id="timing">
             <h2>Timing & Interpolation</h2>
             <p>
-                Движок разделяет обновление логики и рендеринг. Логика обновляется с фиксированной частотой (tick), а отрисовка может происходить чаще. Для плавности используется интерполяция между состояниями.<br>
-                <b>Основные параметры:</b>
+                The engine separates logic updates and rendering. Logic is updated at a fixed rate (tick), while rendering can happen more frequently. Interpolation is used for smooth transitions between states.<br>
+                <b>Main parameters:</b>
             </p>
             <ul>
-                <li><b>tickRate</b> — количество логических обновлений в секунду (по умолчанию 60)</li>
-                <li><b>partialTick</b> — число от 0 до 1, отражающее прогресс между двумя tick</li>
-                <li><b>fps</b> — текущий FPS</li>
+                <li><b>tickRate</b> — logic updates per second (default 60)</li>
+                <li><b>partialTick</b> — value from 0 to 1, progress between two ticks</li>
+                <li><b>fps</b> — current FPS</li>
             </ul>
             <p>
-                Для плавной анимации используйте паттерн интерполяции:<br>
+                For smooth animation, use the interpolation pattern:<br>
                 <code class="language-kotlin">val interpolated = lerp(statePrev, stateNext, partialTick)</code>
             </p>
             <p>
-                В классе <code>Interpolatable</code> реализуйте хранение двух состояний (текущее и предыдущее) и используйте <code>getInterpolatedState()</code> для отрисовки.
+                In the <code>Interpolatable</code> class, store two states (current and previous) and use <code>getInterpolatedState()</code> for rendering.
             </p>
         </section>
         <section id="input">
             <h2>Input Processing</h2>
             <ul>
-                <li>События клавиатуры и мыши поступают из GLFW</li>
-                <li>Обработчики <code>onKeyPress</code>, <code>onKeyPressed</code>, <code>onKeyRelease</code> и аналогичные для мыши вызываются автоматически</li>
-                <li>События <b>Press/Release</b> срабатывают мгновенно, <b>Pressed</b> — каждую итерацию цикла</li>
-                <li>Вся обработка инпута происходит в <code>tick()</code> и <code>onRender()</code> через подписки</li>
+                <li>Keyboard and mouse events come from GLFW</li>
+                <li>Handlers <code>onKeyPress</code>, <code>onKeyPressed</code>, <code>onKeyRelease</code> and similar for mouse are called automatically</li>
+                <li><b>Press/Release</b> events fire instantly, <b>Pressed</b> fires every loop iteration</li>
+                <li>All input handling happens in <code>tick()</code> and <code>onRender()</code> via subscriptions</li>
             </ul>
         </section>
 
