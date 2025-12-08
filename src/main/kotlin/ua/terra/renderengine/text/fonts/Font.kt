@@ -18,9 +18,9 @@ class Font internal constructor(
     val characterMap: Int2ObjectOpenHashMap<CharInfo>,
     val atlasSquareSize: Int,
     val imageFont: RawTexture,
-    private val ascent: Int,
-    private val descent: Int,
-    private val lineGap: Int
+    val ascent: Int,
+    val descent: Int,
+    val lineGap: Int
 ) : FontHolder {
 
     /**

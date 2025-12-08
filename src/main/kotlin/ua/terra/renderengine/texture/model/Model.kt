@@ -9,6 +9,9 @@ package ua.terra.renderengine.texture.model
  */
 data class Model(val minU: Float, val minV: Float, val maxU: Float, val maxV: Float) {
     companion object {
+        /**
+         * The default texture coordinates (0, 0, 1, 1).
+         */
         val DEFAULT = Model(0f, 0f, 1f, 1f)
     }
 }

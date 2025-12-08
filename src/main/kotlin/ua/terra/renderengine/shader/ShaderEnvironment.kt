@@ -17,7 +17,6 @@ class ShaderEnvironment(val type: Int, val fileName: String) {
     fun loadAndAttach(program: Int) {
         id = glCreateShader(type)
 
-        // Use ResourceProvider to get the shader path
         val shaderPath = ResourceProvider.get().getResourcePath(fileName)
         val shaderSource = File(shaderPath).readText()
 

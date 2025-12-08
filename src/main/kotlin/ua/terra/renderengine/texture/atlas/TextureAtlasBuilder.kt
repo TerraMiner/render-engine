@@ -29,10 +29,10 @@ object TextureAtlasBuilder {
         val height: Int
     )
 
-    private data class AtlasMetadata(
-        val paths: Set<String>,
-        val atlasSize: Int,
-        val padding: Int
+    private data class TextureMeta(
+        val originalPath: String,
+        val hash: String,
+        val lastModified: Long
     )
 
     fun build(textures: Set<String>, cachePath: String, padding: Int): TexturesAtlas {
@@ -54,6 +54,66 @@ object TextureAtlasBuilder {
         return buildNewAtlas(textures, padding, metaFile, atlasFile)
     }
 
+    private fun buildNewAtlas(
+        textures: Set<String>,
+        padding: Int,
+        metaFile: File,
+        atlasFile: File
+    ): TexturesAtlas {
+        val loaded = prepareTexturesWithMeta(textures)
+        val atlasSize = calculateAtlasSize(loaded.map { it.first }, padding)
+        val packed = packTextures(loaded.map { it.first }, atlasSize, padding)
+        val atlasBuffer = createAtlasBuffer(loaded.map { it.first }, packed, atlasSize)
+
+        val textureId = createGLTexture(atlasBuffer, atlasSize)
+        val regions = createRegions(packed, atlasSize)
+
+        saveAtlasImage(atlasBuffer, atlasSize, atlasFile)
+        saveMetaFile(metaFile, textures, atlasSize, padding, regions, loaded.map { it.second })
+
+        loaded.forEach {
+            it.first.second.buffer.rewind()
+            it.first.second.free()
+        }
+
+        MemoryUtil.memFree(atlasBuffer)
+
+        return TexturesAtlas(textureId, atlasSize, atlasSize, regions)
+    }
+
+    private fun prepareTexturesWithMeta(textures: Set<String>): List<Pair<Pair<String, ImageData>, TextureMeta>> {
+        val loaded = mutableListOf<Pair<Pair<String, ImageData>, TextureMeta>>()
+
+        loaded.add(
+            (BLANK_TEXTURE_PATH to blankTexture()) to
+                    TextureMeta(BLANK_TEXTURE_PATH, "blank", 0L)
+        )
+
+        textures.forEach { originalPath ->
+            try {
+                val resourcePath = ResourceProvider.get().getResourcePath(originalPath)
+                val file = File(resourcePath)
+                val hash = if (file.exists()) {
+                    file.inputStream().use { stream ->
+                        stream.readBytes().contentHashCode().toString()
+                    }
+                } else "nofile"
+                val lastModified = if (file.exists()) file.lastModified() else 0L
+
+                loaded.add(
+                    (originalPath to TextureManager.loadImage(resourcePath)) to
+                            TextureMeta(originalPath, hash, lastModified)
+                )
+            } catch (e: Exception) {
+                System.err.println("Failed to load texture $originalPath: ${e.message}")
+                throw e
+            }
+        }
+
+        loaded.sortByDescending { it.first.second.width * it.first.second.height }
+        return loaded
+    }
+
     private fun tryLoadFromCache(
         textures: Set<String>,
         padding: Int,
@@ -68,12 +128,57 @@ object TextureAtlasBuilder {
             val cachedPadding = lines[1].substringAfter("padding=").toInt()
             val cachedPaths = lines[2].substringAfter("paths=").split(";").toSet()
 
-            if (cachedPadding != padding) return null
-            if (cachedPaths != textures + BLANK_TEXTURE_PATH) return null
+            if (cachedPadding != padding) {
+                println("Cache miss: padding changed ($cachedPadding -> $padding)")
+                return null
+            }
 
-            val regions = mutableMapOf<String, AtlasRegion>()
+            if (cachedPaths != textures + BLANK_TEXTURE_PATH) {
+                println("Cache miss: texture set changed")
+                return null
+            }
+
+            val metaMap = mutableMapOf<String, TextureMeta>()
+            var regionStart = 3
 
             for (i in 3 until lines.size) {
+                if (lines[i].startsWith("meta=")) {
+                    val parts = lines[i].substringAfter("=").split(",")
+                    if (parts.size == 3) {
+                        metaMap[parts[0]] = TextureMeta(parts[0], parts[1], parts[2].toLong())
+                    }
+                    regionStart = i + 1
+                } else {
+                    break
+                }
+            }
+
+            for (originalPath in textures + BLANK_TEXTURE_PATH) {
+                val meta = metaMap[originalPath]
+                if (meta == null) {
+                    println("Cache miss: no metadata for $originalPath")
+                    return null
+                }
+
+                if (originalPath == BLANK_TEXTURE_PATH) continue
+
+                val resourcePath = ResourceProvider.get().getResourcePath(originalPath)
+                val file = File(resourcePath)
+                val hash = if (file.exists()) {
+                    file.inputStream().use { stream ->
+                        stream.readBytes().contentHashCode().toString()
+                    }
+                } else "nofile"
+                val lastModified = if (file.exists()) file.lastModified() else 0L
+
+                if (meta.hash != hash || meta.lastModified != lastModified) {
+                    println("Cache miss: $originalPath changed (hash or timestamp)")
+                    return null
+                }
+            }
+
+            val regions = mutableMapOf<String, AtlasRegion>()
+            for (i in regionStart until lines.size) {
                 val line = lines[i]
                 if (line.startsWith("region=")) {
                     val parts = line.substringAfter("=").split(",")
@@ -93,7 +198,10 @@ object TextureAtlasBuilder {
                 }
             }
 
-            if (regions.isEmpty()) return null
+            if (regions.isEmpty()) {
+                println("Cache miss: no regions found")
+                return null
+            }
 
             val imageData = TextureManager.loadImage(atlasFile.absolutePath)
             val textureId = createGLTexture(imageData)
@@ -104,52 +212,6 @@ object TextureAtlasBuilder {
             println("Failed to load atlas from cache: ${e.message}")
             null
         }
-    }
-
-    private fun buildNewAtlas(
-        textures: Set<String>,
-        padding: Int,
-        metaFile: File,
-        atlasFile: File
-    ): TexturesAtlas {
-        val loaded = prepareTextures(textures)
-        val atlasSize = calculateAtlasSize(loaded, padding)
-        val packed = packTextures(loaded, atlasSize, padding)
-        val atlasBuffer = createAtlasBuffer(loaded, packed, atlasSize)
-
-        saveAtlasImage(atlasBuffer, atlasSize, atlasFile)
-
-        val textureId = createGLTexture(atlasBuffer, atlasSize)
-        val regions = createRegions(packed, atlasSize)
-
-        saveMetaFile(metaFile, textures, atlasSize, padding, regions)
-
-        loaded.forEach {
-            it.second.buffer.rewind()
-            it.second.free()
-        }
-
-        MemoryUtil.memFree(atlasBuffer)
-
-        return TexturesAtlas(textureId, atlasSize, atlasSize, regions)
-    }
-
-    private fun prepareTextures(textures: Set<String>): List<Pair<String, ImageData>> {
-        val loaded = mutableListOf<Pair<String, ImageData>>()
-        loaded.add(BLANK_TEXTURE_PATH to blankTexture())
-
-        textures.forEach {
-            try {
-                val resourcePath = ResourceProvider.get().getResourcePath(it)
-                loaded.add(it to TextureManager.loadImage(resourcePath))
-            } catch (e: Exception) {
-                System.err.println("Failed to load texture $it: ${e.message}")
-                throw e
-            }
-        }
-
-        loaded.sortByDescending { it.second.width * it.second.height }
-        return loaded
     }
 
     private fun calculateAtlasSize(
@@ -279,6 +341,10 @@ object TextureAtlasBuilder {
     ): ByteBuffer {
         val atlasBuffer = MemoryUtil.memAlloc(atlasSize * atlasSize * 4)
 
+        for (i in 0 until atlasSize * atlasSize * 4) {
+            atlasBuffer.put(i, 0.toByte())
+        }
+
         for (rect in packed) {
             val texture = loaded.first { it.first == rect.path }
             copyTextureToAtlas(texture.second, rect, atlasBuffer, atlasSize)
@@ -290,14 +356,11 @@ object TextureAtlasBuilder {
     }
 
     private fun saveAtlasImage(buffer: ByteBuffer, size: Int, file: File) {
-        val tempFile = File.createTempFile("texture_atlas", ".png")
-        tempFile.deleteOnExit()
+        buffer.position(0)
 
-        if (!stbi_write_png(tempFile.absolutePath, size, size, 4, buffer, size * 4)) {
+        if (!stbi_write_png(file.absolutePath, size, size, 4, buffer, size * 4)) {
             throw RuntimeException("Failed to write atlas PNG")
         }
-
-        tempFile.copyTo(file, overwrite = true)
     }
 
     private fun createRegions(packed: List<PackedRect>, atlasSize: Int): Map<String, AtlasRegion> {
@@ -319,13 +382,16 @@ object TextureAtlasBuilder {
         textures: Set<String>,
         atlasSize: Int,
         padding: Int,
-        regions: Map<String, AtlasRegion>
+        regions: Map<String, AtlasRegion>,
+        metas: List<TextureMeta>
     ) {
         metaFile.bufferedWriter().use { writer ->
             writer.write("atlasSize=$atlasSize\n")
             writer.write("padding=$padding\n")
             writer.write("paths=${(textures + BLANK_TEXTURE_PATH).joinToString(";")}\n")
-
+            metas.forEach { meta ->
+                writer.write("meta=${meta.originalPath},${meta.hash},${meta.lastModified}\n")
+            }
             regions.forEach { (path, region) ->
                 writer.write("region=$path,${region.minU},${region.minV},${region.maxU},${region.maxV}," +
                         "${region.pixelX},${region.pixelY},${region.pixelWidth},${region.pixelHeight}\n")
@@ -359,24 +425,25 @@ object TextureAtlasBuilder {
         }
 
         for (y in 0 until texture.height) {
-            val dstPos = ((rect.y + y) * atlasSize + rect.x) * 4
-            atlasBuffer.position(dstPos)
-
             for (x in 0 until texture.width) {
                 val r = srcData.get()
                 val g = if (bytesPerPixel >= 3) srcData.get() else r
                 val b = if (bytesPerPixel >= 3) srcData.get() else r
                 val a = if (bytesPerPixel == 4) srcData.get() else 255.toByte()
 
-                atlasBuffer.put(r)
-                atlasBuffer.put(g)
-                atlasBuffer.put(b)
-                atlasBuffer.put(a)
+                val dstIndex = ((rect.y + y) * atlasSize + (rect.x + x)) * 4
+
+                atlasBuffer.put(dstIndex + 0, r)
+                atlasBuffer.put(dstIndex + 1, g)
+                atlasBuffer.put(dstIndex + 2, b)
+                atlasBuffer.put(dstIndex + 3, a)
             }
         }
     }
 
     private fun createGLTexture(data: ByteBuffer, size: Int): Int {
+        data.position(0)
+
         val textureId = glGenTextures()
         TextureManager.bindTex(textureId)
 

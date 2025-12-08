@@ -3,10 +3,12 @@ package ua.terra.renderengine.texture.registry
 import org.lwjgl.opengl.GL11.glDeleteTextures
 import org.lwjgl.system.MemoryUtil
 import ua.terra.renderengine.resource.ResourceProvider
+import ua.terra.renderengine.sprite.SpriteConfigLoader
 import ua.terra.renderengine.texture.atlas.AtlasTexture
 import ua.terra.renderengine.texture.atlas.TextureAtlasBuilder
 import ua.terra.renderengine.texture.atlas.TexturesAtlas
 import ua.terra.renderengine.texture.manager.RawTexture
+import ua.terra.renderengine.texture.source.AnimatedTexture
 import ua.terra.renderengine.texture.source.SingleTexture
 import ua.terra.renderengine.texture.source.TextureHolder
 import ua.terra.renderengine.util.DEFAULT_ATLAS_PADDING
@@ -67,18 +69,13 @@ class TextureRegistry {
             throw UnsupportedOperationException("Atlas already built!")
         }
 
-        val cachePath = "${ResourceProvider.get().getCachePath()}/textures"
-        atlas = TextureAtlasBuilder.build(registeredPaths, cachePath, padding)
-
-        registeredPaths.forEach { path ->
-            textureCache[path] = AtlasTexture(atlas, path)
-        }
+        defineAtlasAndPaths(padding)
 
         isBuilt = true
         println("Texture atlas created: ${atlas.width}x${atlas.height}, textures: ${registeredPaths.size + 1}")
     }
 
-    fun reload(cachePath: String, padding: Int = DEFAULT_ATLAS_PADDING) {
+    fun reload(padding: Int = DEFAULT_ATLAS_PADDING) {
         check(isBuilt) { "Cannot reload atlas - not built yet!" }
 
         println("Reloading texture atlas...")
@@ -86,15 +83,14 @@ class TextureRegistry {
         glDeleteTextures(atlas.textureId)
         textureCache.clear()
 
-        atlas = TextureAtlasBuilder.build(registeredPaths, cachePath, padding)
-
-        registeredPaths.forEach { path ->
-            textureCache[path] = AtlasTexture(atlas, path)
-        }
+        defineAtlasAndPaths(padding)
 
         println("Texture atlas reloaded: ${atlas.width}x${atlas.height}, textures: ${registeredPaths.size + 1}")
     }
 
+    /**
+     * Get texture by path.
+     */
     operator fun get(path: String): TextureHolder {
         return if (isBuilt && registeredPaths.contains(path)) {
             getFromAtlas(path)
@@ -106,6 +102,28 @@ class TextureRegistry {
     fun isRegistered(path: String): Boolean = registeredPaths.contains(path)
 
     fun getAllRegistered(): Set<String> = registeredPaths.toSet()
+
+    private fun defineAtlasAndPaths(padding: Int) {
+        val cachePath = "${ResourceProvider.get().getCachePath()}/textures"
+
+        atlas = TextureAtlasBuilder.build(registeredPaths, cachePath, padding)
+
+        registeredPaths.forEach { path ->
+            val baseTexture = AtlasTexture(atlas, path)
+
+            val config = SpriteConfigLoader.loadConfig(path)
+            if (config != null && config.frames.isNotEmpty()) {
+                val definition = SpriteConfigLoader.createDefinitionForAtlas(path, atlas, config)
+                if (definition.isAnimated) {
+                    textureCache[path] = AnimatedTexture(baseTexture, definition)
+                } else {
+                    textureCache[path] = baseTexture
+                }
+            } else {
+                textureCache[path] = baseTexture
+            }
+        }
+    }
 
     companion object {
         internal const val BLANK_TEXTURE_PATH = ""

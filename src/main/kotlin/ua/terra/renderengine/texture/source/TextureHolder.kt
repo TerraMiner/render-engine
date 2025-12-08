@@ -1,5 +1,6 @@
 package ua.terra.renderengine.texture.source
 
+import ua.terra.renderengine.renderer.TextureRenderer
 import ua.terra.renderengine.texture.model.Model
 
 /**
@@ -19,4 +20,25 @@ interface TextureHolder {
     fun bind()
     /** Unbinds this texture from the current OpenGL context */
     fun unbind()
+
+    /** Defines the render behavior when invoked within the TextureRenderer's render method. */
+    fun render(
+        renderer: TextureRenderer,
+        x: Float, y: Float,
+        width: Float, height: Float,
+        zIndex: Int = 0,
+        angle: Float = 0f,
+        color: Int = -1,
+        thickness: Float = 1f,
+        ignoreZoom: Boolean = true,
+        ignoreCamera: Boolean = false
+    ) {
+        renderer.render(
+            textureId,
+            model,
+            x, y, width, height,
+            zIndex, angle, color,
+            thickness, ignoreZoom, ignoreCamera
+        )
+    }
 }

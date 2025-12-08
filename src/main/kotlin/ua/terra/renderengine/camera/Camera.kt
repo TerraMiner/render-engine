@@ -45,7 +45,7 @@ abstract class Camera(protected val core: RenderEngineCore) : Interpolatable() {
     /**
      * Cooldown timer to prevent too rapid zoom changes.
      */
-    var zoomCooldown = Cooldown(50).apply { start() }
+    var zoomCooldown = Cooldown(50, true)
 
     /**
      * Optional boundary constraints for camera movement.
@@ -152,16 +152,6 @@ abstract class Camera(protected val core: RenderEngineCore) : Interpolatable() {
      * Converts screen Y coordinate to scene Y coordinate (integer variant).
      */
     fun getScenePosY(screenY: Int): Int = floor(getScenePosY(screenY.toFloat())).toInt()
-
-    /**
-     * Converts screen coordinates to scene coordinates.
-     * @param screenX Screen X coordinate
-     * @param screenY Screen Y coordinate
-     * @return Scene coordinates as Point
-     */
-    fun getScenePos(screenX: Int, screenY: Int): Point<Float> {
-        return Point(getScenePosX(screenX.toFloat()), getScenePosY(screenY.toFloat()))
-    }
 
     /**
      * Updates camera position to follow target and applies smooth zoom interpolation.

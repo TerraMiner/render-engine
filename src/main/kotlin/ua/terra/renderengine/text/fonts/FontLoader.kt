@@ -225,7 +225,7 @@ object FontLoader {
         atlasSquareSize: Int,
         atlasFile: File
     ) {
-        val atlasBuffer = BufferUtils.createByteBuffer(atlasSize * atlasSize * 4)
+        val atlasBuffer = MemoryUtil.memAlloc(atlasSize * atlasSize * 4)
 
         for (i in 0 until atlasSize * atlasSize) {
             atlasBuffer.put(i * 4 + 0, 0.toByte())
@@ -291,16 +291,15 @@ object FontLoader {
             }
         }
 
-        val tempFile = File.createTempFile("font_atlas", ".png")
-        tempFile.deleteOnExit()
+        atlasBuffer.position(0)
 
-        if (!stbi_write_png(tempFile.absolutePath, atlasSize, atlasSize, 4, atlasBuffer, atlasSize * 4)) {
-            throw RuntimeException("Failed to write PNG atlas")
+        try {
+            if (!stbi_write_png(atlasFile.absolutePath, atlasSize, atlasSize, 4, atlasBuffer, atlasSize * 4)) {
+                throw RuntimeException("Failed to write PNG atlas")
+            }
+        } finally {
+            MemoryUtil.memFree(atlasBuffer)
         }
-
-        MemoryUtil.memFree(atlasBuffer)
-
-        tempFile.copyTo(atlasFile, overwrite = true)
     }
 
     private fun saveMetaFile(
@@ -342,6 +341,7 @@ object FontLoader {
             imageData.width, imageData.height, 0,
             format, GL_UNSIGNED_BYTE, imageData.buffer
         )
+
 
         TextureManager.unbindTex()
         imageData.free()

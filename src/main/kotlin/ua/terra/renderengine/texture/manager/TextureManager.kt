@@ -3,6 +3,7 @@ package ua.terra.renderengine.texture.manager
 import org.lwjgl.BufferUtils
 import org.lwjgl.glfw.GLFWImage
 import org.lwjgl.opengl.GL11
+import org.lwjgl.opengl.GL11.glTexImage2D
 import org.lwjgl.opengl.GL12
 import org.lwjgl.opengl.GL13
 import org.lwjgl.stb.STBImage
@@ -116,7 +117,7 @@ object TextureManager {
 
             val format = getFormat(image.channels)
 
-            GL11.glTexImage2D(
+            glTexImage2D(
                 GL11.GL_TEXTURE_2D,
                 0,
                 format,

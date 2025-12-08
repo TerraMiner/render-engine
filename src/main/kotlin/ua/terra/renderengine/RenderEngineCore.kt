@@ -31,12 +31,13 @@ abstract class RenderEngineCore(
 ) {
     /**
      * Resource pack manager for loading resources from packs or JAR.
+     * Uses the subclass to determine the correct game directory.
      */
-    val resourcePackManager = ResourcePackManager()
+    val resourcePackManager = ResourcePackManager(this::class.java)
 
     /**
      * Path to cache directory for texture and font atlases.
-     * By default uses ResourceProvider cache path.
+     * By default, uses ResourceProvider cache path.
      * Can be overridden in subclass for custom resource systems.
      */
     open val resourcesPath: String
@@ -85,11 +86,6 @@ abstract class RenderEngineCore(
 
     /**
      * Initializes the core rendering system.
-     * @param title Window title
-     * @param width Window width
-     * @param height Window height
-     * @param resourcePacks List of resource pack paths
-     * @param enableVSync Whether to enable vertical synchronization
      */
     fun enable() {
         _INSTANCE = this
@@ -155,8 +151,8 @@ abstract class RenderEngineCore(
         renderEngine.reloadShader()
     }
 
-    fun reloadTextures(cachePath: String, padding: Int = DEFAULT_ATLAS_PADDING) {
-        textureRegistry.reload(cachePath, padding)
+    fun reloadTextures(padding: Int = DEFAULT_ATLAS_PADDING) {
+        textureRegistry.reload(padding)
     }
 
     fun reloadFonts(cachePath: String) {

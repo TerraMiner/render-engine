@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import kotlin.io.extension
 
 /**
  * Resource pack management system like in Minecraft.
@@ -30,8 +29,10 @@ import kotlin.io.extension
  *     extracted/
  *   resourcepacks.json
  * ```
+ *
+ * @param contextClass Game class for determining the correct directory (usually RenderEngineCore::class.java from the game)
  */
-class ResourcePackManager : ResourceProvider {
+class ResourcePackManager(private val contextClass: Class<*>? = null) : ResourceProvider {
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
     private val gameDir: File by lazy { determineGameDirectory() }
@@ -74,17 +75,27 @@ class ResourcePackManager : ResourceProvider {
     }
 
     private fun determineGameDirectory(): File {
-
-        val codeSource = ResourcePackManager::class.java.protectionDomain.codeSource
+        val targetClass = contextClass ?: ResourcePackManager::class.java
+        val codeSource = targetClass.protectionDomain.codeSource
         val jarFile = codeSource?.location?.toURI()?.let { File(it) }
 
         return when {
             jarFile != null && jarFile.isFile && jarFile.extension == "jar" -> {
                 jarFile.parentFile ?: File(".")
             }
-            else -> File(System.getProperty("user.dir"))
+
+            jarFile != null && jarFile.isDirectory -> {
+                jarFile.parentFile?.parentFile ?: File(".")
+            }
+
+            else -> {
+                File(System.getProperty("user.dir"))
+            }
         }.also {
             println("Game directory: ${it.absolutePath}")
+            if (contextClass != null) {
+                println("  (determined from context class: ${contextClass.simpleName})")
+            }
         }
     }
 
@@ -94,21 +105,16 @@ class ResourcePackManager : ResourceProvider {
 
         resourcePacksDir.listFiles()?.filter { it.isDirectory }?.forEach { packDir ->
             val packJsonFile = File(packDir, "pack.json")
+            if (!packJsonFile.exists()) return
 
-            val pack = if (packJsonFile.exists()) {
-                try {
-                    val metadata = gson.fromJson(packJsonFile.readText(), ResourcePackMetadata::class.java)
-                    ResourcePack(packDir.name, packDir, metadata)
-                } catch (e: Exception) {
-                    println("Warning: Failed to parse pack.json in ${packDir.name}: ${e.message}")
-                    ResourcePack(packDir.name, packDir, ResourcePackMetadata(packDir.name))
-                }
-            } else {
-                ResourcePack(packDir.name, packDir, ResourcePackMetadata(packDir.name, "Resource pack (no pack.json)"))
+            try {
+                val metadata = gson.fromJson(packJsonFile.readText(), ResourcePackMetadata::class.java)
+                val pack = ResourcePack(packDir.name, packDir, metadata)
+                availablePacks[pack.id] = pack
+                println("Found resource pack: ${pack.id} - ${pack.metadata.name}")
+            } catch (e: Exception) {
+                println("Error: Failed to parse pack.json in ${packDir.name}: ${e.message}")
             }
-
-            availablePacks[pack.id] = pack
-            println("Found resource pack: ${pack.id} - ${pack.metadata.name}")
         }
     }
 
